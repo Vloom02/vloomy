@@ -10,6 +10,7 @@ import os
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 os.environ['VLOOMY_HOST'] = '127.0.0.1'  # la prueba no abre el puerto a la red
 os.environ['VLOOMY_PUERTO'] = '8799'
@@ -31,10 +32,17 @@ def voz_16k(tts, texto, voz='em_alex', lang='es-419'):
     return (np.clip(pcm, -1, 1) * 32767).astype(np.int16)
 
 
-def puntaje_wake(clip):
-    oww = Model(wakeword_model_paths=[V.WAKE_MODEL])
+def seguidos_wake(clip):
+    """Por modelo: máximo de bloques seguidos arriba de su umbral (Vloomy se activa con WAKE_PACIENCIA)."""
+    oww = Model(wakeword_model_paths=list(V.WAKE_MODELOS))
+    umbrales = {Path(r).stem: u for r, u in V.WAKE_MODELOS.items()}
     clip = np.concatenate([np.zeros(16000, np.int16), clip, np.zeros(16000, np.int16)])
-    return max(list(oww.predict(clip[i:i + 1280]).values())[0] for i in range(0, len(clip) - 1279, 1280))
+    actual, maximo = dict.fromkeys(umbrales, 0), dict.fromkeys(umbrales, 0)
+    for i in range(0, len(clip) - 1279, 1280):
+        for nombre, p in oww.predict(clip[i:i + 1280]).items():
+            actual[nombre] = actual[nombre] + 1 if p >= umbrales[nombre] else 0
+            maximo[nombre] = max(maximo[nombre], actual[nombre])
+    return maximo
 
 
 def post(ruta, cuerpo, token):
@@ -51,10 +59,15 @@ async def main():
     v = V.Vloomy()
     tts = Kokoro(str(V.KOKORO / 'kokoro-v1.0.onnx'), str(V.KOKORO / 'voices-v1.0.bin'))
 
-    si = puntaje_wake(voz_16k(tts, 'Hey Jarvis!', 'am_michael', 'en-us'))
-    no = puntaje_wake(voz_16k(tts, 'Hola, ¿cómo andás? Hoy hace calor.'))
-    print(f'wake word: "Hey Jarvis" {si:.2f} | frase común {no:.2f} (umbral {V.WAKE_UMBRAL})')
-    assert si >= V.WAKE_UMBRAL > no
+    jarvis = seguidos_wake(voz_16k(tts, 'Hey Jarvis!', 'am_michael', 'en-us'))
+    comun = seguidos_wake(voz_16k(tts, 'Hola, ¿cómo andás? Hoy hace calor.'))
+    print(f'wake word (bloques seguidos arriba del umbral): "Hey Jarvis" {jarvis} | frase común {comun}')
+    assert jarvis['hey_jarvis_v0.1'] >= V.WAKE_PACIENCIA
+    assert all(n < V.WAKE_PACIENCIA for n in comun.values())
+    if V.VLOOMY_MODEL.exists():  # af_heart quedó afuera del entrenamiento: es una voz nueva para el modelo
+        vloomy = seguidos_wake(voz_16k(tts, 'Hey Blumi!', 'af_heart', 'es-419'))
+        print(f'wake word: "Hey Blumi" con voz nueva {vloomy}')
+        assert vloomy['hey_vloomy'] >= V.WAKE_PACIENCIA
 
     for frase, esperado in [('Abrí el bloc de notas.', ('abrir', 'bloc de notas')), ('¿Qué hora es?', ('hora', None))]:
         t = time.perf_counter()
@@ -79,7 +92,7 @@ async def main():
 
     async def simular(nombre, args, confirmar):
         usadas.append((nombre, args))
-        return 'Hecho.'
+        return capa0.calcular(args['expresion']) if nombre == 'calcular' else 'Hecho.'  # calcular no toca la PC
 
     v.ejecutar = simular
     cliente, modelo, extra = next(v.proveedores())
@@ -90,6 +103,8 @@ async def main():
         t = time.perf_counter()
         respuesta = await v.conversar(cliente, modelo, extra, msgs, lambda frase: None, None)
         print(f'{modelo} | {pedido} -> {respuesta!r} {usadas} | {(time.perf_counter() - t) * 1000:.0f} ms')
+        if 'quince' in pedido:
+            assert '105' in respuesta or 'ciento cinco' in respuesta.lower(), respuesta
 
     # Servidor del celular: HTTP real, token y respuesta en streaming.
     v.ejecutar = ejecutar_real

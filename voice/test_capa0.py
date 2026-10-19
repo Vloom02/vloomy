@@ -1,7 +1,7 @@
 """Correr con:  .venv\\Scripts\\python.exe test_capa0.py"""
 import datetime
 
-from capa0 import buscar_app, ejecutar_local, parse
+from capa0 import buscar_app, calcular, ejecutar_local, parse
 
 CASOS = {
     'Hey Jarvis, abrí Spotify': ('abrir', 'spotify'),
@@ -38,4 +38,14 @@ assert buscar_app('espotifai', APPS) == 'Spotify'  # como lo transcribe Whisper 
 assert buscar_app('spotfy', APPS) == 'Spotify'
 assert buscar_app('photoshop', APPS) is None
 
-print(f'ok: {len(CASOS) + 8} casos')
+assert calcular('15*7') == '105'
+assert calcular('3.5 * 60') == '210'
+assert calcular('23 x 4') == '92'
+assert calcular('(1 + 2) ** 3 - 10 / 4') == '24.5'
+assert calcular('1,5 + 1') == '2.5'
+assert calcular('-8 // 3') == '-3'
+assert calcular('__import__("os").system("dir")').startswith('No pude')
+assert calcular('2 ** 100000').startswith('No pude')
+assert calcular('1/0').startswith('No pude')
+
+print(f'ok: {len(CASOS) + 17} casos')

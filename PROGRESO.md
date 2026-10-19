@@ -26,8 +26,20 @@ Restricciones:
 - [x] App Android en `android/` (APK en `Vloomy.apk`, se recompila con `android\build.cmd`).
 - [x] Test JVM del wake word en Kotlin: 0,9978 contra 0,998 de Python con el mismo WAV.
 - [x] Capa 2: `capa2/canal.mjs` + `delegar_a_claude` + avisos y permisos por voz. Test: `capa2\test_canal.py`. El usuario tiene que iniciar sesión en `capa2.cmd`.
-- [ ] Entrenar "Hey Vloomy" (`voice\entrenar_wake.py`) → `voice\modelos\hey_vloomy.onnx` + `.json` con el umbral; copiar ambos a `android\wake\src\main\resources\models\` y recompilar. La PC y la app ya cargan el modelo solas si existe.
-- [ ] GUIA.md: completar la sección "Palabra de activación" (`{{WAKE}}`) con las métricas del entrenamiento.
+- [x] "Hey Vloomy" entrenado (`voice\modelos\hey_vloomy.onnx` + `.json`, umbral 0,55, paciencia 2): 99,5% de detección en vivo con voces nuevas y 0 falsas/hora en 10,7 h reales. Copiado a la app. "Hey Jarvis" sigue activo. Negativos en `.cache\wake` (ACAV100M 16 GB + validación).
+- [x] Herramienta `calcular` (cuenta exacta con ast): gpt-oss-120b erraba cuentas en palabras.
+- [x] GUIA.md completa con los pasos para la mañana.
+
+## Pendiente (necesita al usuario o un teléfono)
+
+- Probar con micrófono real en la PC y en el celular. Ajustar umbrales con su voz si hace falta.
+- Iniciar sesión en `capa2.cmd` y aprobar los servidores MCP.
+- Permitir Python en el firewall (lo pide Windows la primera vez que corre `vloomy.cmd`).
+- Opcional: Tailscale para usarlo fuera de casa.
+
+## Registro
+
+- 19/10/2026 02:43: fases 1 a 4 terminadas y probadas sin micrófono (Python, JVM y protocolo del canal). APK compilado.
 
 ## Cómo probar
 

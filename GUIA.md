@@ -60,7 +60,8 @@ abrir puertos.
 | Tipo | Ejemplos | Quién lo resuelve | Tiempo típico |
 |---|---|---|---|
 | Comandos fijos | "abrí Spotify", "subí / bajá el volumen", "silencio", "pausá la música", "siguiente canción", "¿qué hora es?", "¿qué día es hoy?", "bloqueá la compu" | **Capa 0**, sin IA | instantáneo |
-| Pedidos libres | "poné la música un poco más fuerte", "abrí la calculadora y el bloc de notas", "¿cuántos minutos son tres horas y media?", "cerrá esta ventana" | **Capa 1**: Groq gpt-oss-120b, gratis | ~0,5 a 0,8 s |
+| Pedidos libres | "poné la música un poco más fuerte", "abrí la calculadora y el bloc de notas", "¿cuál es la capital de Australia?", "cerrá esta ventana" | **Capa 1**: Groq gpt-oss-120b, gratis | ~0,5 a 0,8 s |
+| Cuentas | "¿cuánto es 15 por 7?", "¿cuántos minutos son tres horas y media?" | Capa 1 + `calcular` (cuenta exacta) | ~0,8 a 1,2 s |
 | Tareas largas | "investigá…", "comparame…", "ordená las descargas…", "armame un informe…" | **Capa 2**: Claude Code con tu suscripción | minutos, te avisa al terminar |
 
 - **Los atajos de teclado** ("cerrá esta ventana" → `alt+f4`) preguntan "¿Confirmo…?". Contestás "sí", "dale" u "ok";
@@ -76,7 +77,7 @@ Celular:  micrófono ─▶ wake word ─▶ bip ─▶ graba ─▶ POST /voz (
           voz a texto: Groq whisper-large-v3-turbo (si falla: Whisper local)
           ─▶ capa 0: ¿comando fijo?  sí ─▶ lo hace
                                      no ─▶ capa 1: Groq gpt-oss-120b → gpt-oss-20b → Ollama local (respaldo)
-                                           herramientas: control_pc · abrir_app · atajos · ventanas · delegar_a_claude
+                                           herramientas: control_pc · abrir_app · calcular · atajos · ventanas · delegar_a_claude
                                                                                        │
                                            capa 2: Claude Code (capa2.cmd) ◀── canal ──┘ ── avisa al terminar
           ─▶ respuesta frase por frase: voz Kokoro en la PC / voz de Android en el celular
@@ -98,7 +99,26 @@ Celular:  micrófono ─▶ wake word ─▶ bip ─▶ graba ─▶ POST /voz (
 
 ## Palabra de activación "Hey Vloomy"
 
-{{WAKE}}
+Podés decir **"Hey Vloomy"** (se pronuncia como suena: "jei blumi") o **"Hey Jarvis"** (en inglés). Las dos andan
+siempre, en la PC y en el celular.
+
+**Cómo se entrenó "Hey Vloomy"** (`voice\entrenar_wake.py`, ~10 minutos con los datos ya bajados):
+- **Positivos:** 37 voces sintéticas de Kokoro, en español y en inglés, a 4 velocidades, con ruido de fondo, eco y
+  cambios de tono.
+- **Negativos:** frases parecidas ("hey Lumi", "blusa", "Bloomberg", "hey Jarvis"…), 200.000 ventanas de habla y
+  ruido reales (ACAV100M) y las 5.685 ventanas reales que más lo confundían, en una segunda vuelta.
+- **Paciencia 2:** tiene que pasar el umbral en dos bloques seguidos de 80 ms. Eso corta los picos sueltos.
+
+| Métrica | Hey Vloomy (umbral 0,55) | Hey Jarvis oficial (umbral 0,5) |
+|---|---|---|
+| Detecta, con voces que nunca escuchó (en vivo) | **99,5%** | — |
+| Falsas activaciones en 10,7 h de audio real | **0 por hora** | 0,19 por hora |
+
+**Ojo:** se entrenó con voces sintéticas, así que con tu voz real puede variar.
+- **Si no te reconoce:** bajá `umbral` en `voice\modelos\hey_vloomy.json` (0,55 → 0,4).
+- **Si se activa solo:** subilo (→ 0,7).
+- **Para aplicarlo:** en la PC alcanza con reabrir `vloomy.cmd`. En el celular copiá el `.json` a
+  `android\wake\src\main\resources\models\` y corré `android\build.cmd`.
 
 ## Dónde está cada cosa (todo en D)
 
@@ -144,6 +164,7 @@ Celular:  micrófono ─▶ wake word ─▶ bip ─▶ graba ─▶ POST /voz (
 | Pedido completo desde el celular (/voz) | ~0,75 s |
 | Voz Kokoro | 0,38 s por cada segundo de audio |
 | Wake word en Kotlin vs Python | 0,9978 vs 0,998 (mismo audio) |
+| Cuenta con `calcular` desde el celular | ~1,2 s |
 
 ## Problemas comunes
 

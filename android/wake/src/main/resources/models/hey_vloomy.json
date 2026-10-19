@@ -1,0 +1,7 @@
+{
+  "umbral": 0.55,
+  "paciencia": 2,
+  "detecta_voces_nuevas": 0.995,
+  "falsas_por_hora": 0.0,
+  "horas_validacion": 10.7
+}

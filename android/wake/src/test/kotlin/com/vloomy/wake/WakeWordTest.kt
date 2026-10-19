@@ -9,23 +9,46 @@ import org.junit.Test
 class WakeWordTest {
     private fun wav(nombre: String) = Wav.leer(javaClass.getResourceAsStream("/$nombre")!!.use { it.readBytes() })
 
-    private fun maximo(nombre: String): Float = WakeWord(listOf(WakeWord.recurso("hey_jarvis_v0.1.onnx"))).use { w ->
-        wav(nombre).toList().chunked(WakeWord.BLOQUE).filter { it.size == WakeWord.BLOQUE }
-            .maxOf { w.procesar(it.toShortArray())[0] }
+    /** Puntajes bloque a bloque de cada modelo incluido (hey jarvis y, si está, hey vloomy). */
+    private fun puntajes(nombre: String): List<FloatArray> =
+        WakeWord(WakeWord.incluidos().map { it.first }).use { w ->
+            wav(nombre).toList().chunked(WakeWord.BLOQUE).filter { it.size == WakeWord.BLOQUE }
+                .map { w.procesar(it.toShortArray()) }
+        }
+
+    /** Máximo de bloques seguidos arriba del umbral (la app se activa con 2). */
+    private fun seguidos(p: List<FloatArray>, modelo: Int): Int {
+        val umbral = WakeWord.incluidos()[modelo].second
+        var actual = 0
+        var maximo = 0
+        for (b in p) {
+            actual = if (b[modelo] >= umbral) actual + 1 else 0
+            maximo = maxOf(maximo, actual)
+        }
+        return maximo
     }
 
     @Test
     fun detectaHeyJarvis() {
-        val puntaje = maximo("hey_jarvis.wav")
-        println("hey_jarvis.wav -> $puntaje")
-        assertTrue("puntaje $puntaje", puntaje > 0.9f)
+        val p = puntajes("hey_jarvis.wav")
+        println("hey_jarvis.wav -> máximo ${p.maxOf { it[0] }}, seguidos ${seguidos(p, 0)}")
+        assertTrue(p.maxOf { it[0] } > 0.9f)
+        assertTrue(seguidos(p, 0) >= 2)
+    }
+
+    @Test
+    fun detectaHeyVloomy() {
+        if (WakeWord.incluidos().size < 2) return  // todavía sin modelo propio
+        val p = puntajes("hey_blumi.wav")
+        println("hey_blumi.wav -> máximo ${p.maxOf { it[1] }}, seguidos ${seguidos(p, 1)}")
+        assertTrue(seguidos(p, 1) >= 2)
     }
 
     @Test
     fun ignoraUnaFraseComun() {
-        val puntaje = maximo("frase_comun.wav")
-        println("frase_comun.wav -> $puntaje")
-        assertTrue("puntaje $puntaje", puntaje < 0.1f)
+        val p = puntajes("frase_comun.wav")
+        println("frase_comun.wav -> máximos ${p.first().indices.map { i -> p.maxOf { it[i] } }}")
+        for (i in p.first().indices) assertTrue(seguidos(p, i) < 2)
     }
 
     @Test

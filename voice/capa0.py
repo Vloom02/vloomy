@@ -2,10 +2,12 @@
 
 parse() es pura (se testea en test_capa0.py); ejecutar_local() toca Windows.
 """
+import ast
 import ctypes
 import datetime
 import difflib
 import json
+import operator
 import re
 import subprocess
 import unicodedata
@@ -96,6 +98,32 @@ def abrir_app(nombre):
         return f'No encontré {nombre} en el menú Inicio.'
     subprocess.Popen(['explorer.exe', f'shell:AppsFolder\\{apps[encontrada]}'])
     return f'Abriendo {encontrada}.'
+
+
+_OPERACIONES = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv,
+                ast.Pow: operator.pow, ast.Mod: operator.mod, ast.FloorDiv: operator.floordiv,
+                ast.USub: operator.neg, ast.UAdd: operator.pos}
+
+
+def calcular(expresion):
+    """Cuenta exacta para la IA (los modelos chicos erran cuentas). Solo números y + - * / ** % //; nada de eval."""
+    def valor(nodo):
+        if isinstance(nodo, ast.Constant) and type(nodo.value) in (int, float):
+            return nodo.value
+        if isinstance(nodo, ast.BinOp) and type(nodo.op) in _OPERACIONES:
+            izq, der = valor(nodo.left), valor(nodo.right)
+            if isinstance(nodo.op, ast.Pow) and abs(der) > 100:
+                raise ValueError('potencia demasiado grande')
+            return _OPERACIONES[type(nodo.op)](izq, der)
+        if isinstance(nodo, ast.UnaryOp) and type(nodo.op) in _OPERACIONES:
+            return _OPERACIONES[type(nodo.op)](valor(nodo.operand))
+        raise ValueError('solo se permiten números y + - * / ** % //')
+
+    try:
+        r = valor(ast.parse(expresion.replace(',', '.').replace('x', '*').replace('^', '**'), mode='eval').body)
+    except (SyntaxError, ValueError, ZeroDivisionError, OverflowError) as e:
+        return f'No pude calcular {expresion!r}: {e}'
+    return str(round(r, 6)).removesuffix('.0') if isinstance(r, float) else str(r)
 
 
 def ejecutar_local(accion, ahora=None):

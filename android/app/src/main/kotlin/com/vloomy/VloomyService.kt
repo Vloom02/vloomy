@@ -28,7 +28,7 @@ import kotlin.concurrent.thread
 class VloomyService : Service() {
     @Volatile private var activo = false
     @Volatile private var forzar = false
-    private var hilo: Thread? = null
+    @Volatile private var hilo: Thread? = null
     private lateinit var tts: TextToSpeech
     private val bip = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
     private var wakeLock: PowerManager.WakeLock? = null
@@ -51,8 +51,12 @@ class VloomyService : Service() {
         if (intent?.action == HABLAR) forzar = true
         if (hilo == null) {
             activo = true
-            wakeLock = getSystemService(PowerManager::class.java)
-                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "vloomy:escucha").apply { acquire() }
+            if (wakeLock == null) {
+                wakeLock = getSystemService(PowerManager::class.java)
+                    .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "vloomy:escucha")
+                    .apply { setReferenceCounted(false) }
+            }
+            wakeLock?.acquire()
             hilo = thread(name = "vloomy") { bucle() }
         }
         // Android 14+ no deja reabrir el micrófono desde segundo plano: si el sistema lo mata, se reactiva desde la app.
@@ -83,11 +87,14 @@ class VloomyService : Service() {
                 Vad().use { vad ->
                     grabador.startRecording()
                     val bloque = ShortArray(WakeWord.BLOQUE)
+                    val seguidos = IntArray(modelos.size)
                     while (activo) {
                         leer(grabador, bloque)
                         val puntajes = wake.procesar(bloque)
-                        if (forzar || puntajes.indices.any { puntajes[it] >= umbrales[it] }) {
+                        for (i in puntajes.indices) seguidos[i] = if (puntajes[i] >= umbrales[i]) seguidos[i] + 1 else 0
+                        if (forzar || seguidos.any { it >= WAKE_PACIENCIA }) {
                             forzar = false
+                            seguidos.fill(0)
                             atender(grabador, vad, servidor)
                             vaciar(grabador)
                             wake.reset()
@@ -97,10 +104,11 @@ class VloomyService : Service() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "se cortó la escucha", e)
-            avisar("Error: ${e.message}")
+            avisar("Se cortó la escucha: ${e.message}. Tocá \"Activar escucha\".")
         } finally {
-            grabador.stop()
+            if (grabador.recordingState == AudioRecord.RECORDSTATE_RECORDING) grabador.stop()
             grabador.release()
+            hilo = null  // así "Activar escucha" la puede volver a prender
         }
     }
 
@@ -200,6 +208,7 @@ class VloomyService : Service() {
         const val HABLAR = "com.vloomy.HABLAR"
         private const val CANAL = "escucha"
         private const val TAG = "Vloomy"
+        private const val WAKE_PACIENCIA = 2  // bloques seguidos arriba del umbral, igual que en la PC
         private const val VAD_UMBRAL = 0.5f
         private const val SILENCIO_FIN = 10   // ~0,8 s callado = terminaste de hablar
         private const val ESPERA_MAX = 62     // ~5 s sin que digas nada = falsa alarma

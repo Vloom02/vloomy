@@ -23,7 +23,8 @@ CACHE = AQUI.parent / '.cache' / 'wake'
 SALIDA = AQUI / 'modelos' / 'hey_vloomy.onnx'
 KOKORO = AQUI.parent / '.cache' / 'kokoro'
 SR, VENTANA = 16000, 32000  # 2 s: openWakeWord saca exactamente 16 embeddings de esto
-FP_POR_HORA_MAX = 0.5       # objetivo de falsas activaciones con habla real
+PACIENCIA = 2               # ventanas seguidas arriba del umbral para activarse (corta picos sueltos)
+FP_POR_HORA_MAX = 0.2       # objetivo de falsas activaciones con habla real, ya con la paciencia
 
 POSITIVOS = {'es-419': ['Hey Blumi', 'Ey Blumi', 'Hey Vloomy', 'Jey Blumi', 'Hey Blumi!'],
              'en-us': ['Hey Vloomy', 'Hey Bloomy', 'Hey Vloomie']}
@@ -110,6 +111,43 @@ def negativos_reales(rng, n):
     return np.asarray(acav[elegidas], dtype=np.float32)
 
 
+def entrenar(x, y, media, desvio):
+    clf = MLPClassifier(hidden_layer_sizes=(128, 64), alpha=1e-3, batch_size=512, max_iter=30,
+                        early_stopping=True, validation_fraction=0.1, n_iter_no_change=4, random_state=7)
+    return clf.fit((x - media) / desvio, y)
+
+
+def negativos_dificiles(clf, media, desvio, maximo=60_000):
+    """Pasa el modelo por las 5,6 M ventanas reales y se queda con las que más lo engañan."""
+    acav = np.load(CACHE / 'acav100m_features.npy', mmap_mode='r')
+    puntajes = np.concatenate([
+        clf.predict_proba((np.asarray(acav[i:i + 100_000], dtype=np.float32).reshape(-1, 16 * 96) - media) / desvio)[:, 1]
+        for i in range(0, acav.shape[0], 100_000)])
+    peores = np.argsort(puntajes)[::-1][:maximo]
+    peores = np.sort(peores[puntajes[peores] > 0.01])
+    print(f'   {np.sum(puntajes > 0.5)} ventanas reales lo engañaban (>0,5); agrego las {len(peores)} peores')
+    return np.asarray(acav[peores], dtype=np.float32)
+
+
+def activaciones(p, umbral):
+    """Cuenta activaciones con paciencia: PACIENCIA ventanas seguidas arriba del umbral."""
+    arriba = p >= umbral
+    seguidas = np.convolve(arriba, np.ones(PACIENCIA, int), mode='valid') == PACIENCIA
+    return int(seguidas[0]) + int(np.sum(seguidas[1:] & ~seguidas[:-1]))
+
+
+def recall_en_vivo(clips, umbral):
+    """Detección con el pipeline real de openWakeWord, bloque a bloque y con paciencia."""
+    from openwakeword.model import Model
+    detectados = 0
+    for clip in clips:
+        oww = Model(wakeword_model_paths=[str(SALIDA)])
+        audio = np.concatenate([np.zeros(SR, np.int16), clip, np.zeros(SR, np.int16)])
+        puntajes = [oww.predict(audio[i:i + 1280])['hey_vloomy'] for i in range(0, len(audio) - 1279, 1280)]
+        detectados += activaciones(np.array(puntajes), umbral) > 0
+    return detectados / len(clips)
+
+
 def exportar(clf, media, desvio, ruta):
     """MLP de sklearn -> ONNX con la normalización metida en la primera capa."""
     pesos = [w.astype(np.float32) for w in clf.coefs_]
@@ -164,7 +202,8 @@ def main():
     es_prueba = np.array([v in prueba for v in voz_pos])
     entren = [c for c, p in zip(pos, es_prueba) if not p]
     x_pos = features(af, [aumentar(c, rng, True) for c in entren for _ in range(4)])
-    x_pos_prueba = features(af, [aumentar(c, rng, True) for c, p in zip(pos, es_prueba) if p])
+    clips_prueba = [aumentar(c, rng, True) for c, p in zip(pos, es_prueba) if p]
+    x_pos_prueba = features(af, clips_prueba)
     x_neg = features(af, [aumentar(c, rng, False) for c in neg for _ in range(2)] + solo_ruido(rng, 1000))
     x_real = negativos_reales(rng, 200_000)
     print(f'   positivos {len(x_pos)} (+{len(x_pos_prueba)} de prueba), negativos sintéticos {len(x_neg)}, '
@@ -179,9 +218,12 @@ def main():
     media, desvio = x.mean(axis=0), x.std(axis=0) + 1e-6
 
     print(f'4) entrenando con {len(x)} ejemplos… ({time.time() - t0:.0f} s)')
-    clf = MLPClassifier(hidden_layer_sizes=(128, 64), alpha=1e-3, batch_size=512, max_iter=30,
-                        early_stopping=True, validation_fraction=0.1, n_iter_no_change=4, random_state=7, verbose=True)
-    clf.fit((x - media) / desvio, y)
+    clf = entrenar(x, y, media, desvio)
+    print(f'   buscando negativos difíciles en ACAV100M… ({time.time() - t0:.0f} s)')
+    dificiles = negativos_dificiles(clf, media, desvio).reshape(-1, 16 * 96)
+    x, y = np.concatenate([x, dificiles]), np.concatenate([y, np.zeros(len(dificiles))])
+    print(f'   reentrenando con {len(x)} ejemplos… ({time.time() - t0:.0f} s)')
+    clf = entrenar(x, y, media, desvio)
 
     print(f'5) evaluando… ({time.time() - t0:.0f} s)')
     # Habla y ruido reales continuos (~11 h, un frame cada 80 ms): ventanas de 16 frames, como en vivo.
@@ -193,19 +235,21 @@ def main():
     horas = len(frames) * 0.08 / 3600
     tabla = []
     for umbral in np.arange(0.3, 0.99, 0.05):
-        arriba = p_val >= umbral
-        fp = (arriba[0] + np.sum(arriba[1:] & ~arriba[:-1])) / horas  # activaciones, no ventanas sueltas
+        fp = activaciones(p_val, umbral) / horas
         tabla.append((float(umbral), float((p_pos >= umbral).mean()), float(fp)))
         print(f'   umbral {umbral:.2f}: detecta {tabla[-1][1]:.0%} con voces nuevas | {fp:.2f} falsas/hora')
     validos = [t for t in tabla if t[2] <= FP_POR_HORA_MAX] or [tabla[-1]]
-    umbral, recall, fp = max(validos, key=lambda t: (t[1], t[0]))
-    print(f'   elegido: umbral {umbral:.2f} -> detecta {recall:.0%}, {fp:.2f} falsas/hora '
-          f'(validación: {horas:.1f} h de audio real)')
+    mejor = max(t[1] for t in validos)
+    # El umbral más alto que detecta casi lo mismo que el mejor: margen contra la tele, la música, etc.
+    umbral, recall, fp = max((t for t in validos if t[1] >= mejor - 0.01), key=lambda t: t[0])
+    print(f'   elegido: umbral {umbral:.2f} -> {fp:.2f} falsas/hora (validación: {horas:.1f} h de audio real)')
 
     exportar(clf, media, desvio, SALIDA)
+    en_vivo = recall_en_vivo(clips_prueba, umbral)
+    print(f'   en vivo (bloque a bloque, paciencia {PACIENCIA}): detecta {en_vivo:.0%} con voces nuevas')
     SALIDA.with_suffix('.json').write_text(json.dumps(
-        {'umbral': round(umbral, 2), 'detecta_voces_nuevas': round(recall, 3), 'falsas_por_hora': round(fp, 3),
-         'horas_validacion': round(horas, 1)}, indent=2))
+        {'umbral': round(umbral, 2), 'paciencia': PACIENCIA, 'detecta_voces_nuevas': round(en_vivo, 3),
+         'falsas_por_hora': round(fp, 3), 'horas_validacion': round(horas, 1)}, indent=2))
     import onnxruntime as ort
     s = ort.InferenceSession(str(SALIDA))
     muestra = x_pos_prueba[:8]

@@ -48,6 +48,7 @@ SR = 16000
 CHUNK = 1280                  # 80 ms, el bloque que espera openWakeWord
 WAKE_MODEL = openwakeword.models['hey_jarvis']['model_path']
 WAKE_UMBRAL = 0.5
+WAKE_PACIENCIA = 2            # bloques seguidos arriba del umbral: en 10,7 h de audio real bajó "hey jarvis" de 0,47 a 0,19 falsas/h
 # "Hey Vloomy" propio (entrenar_wake.py); su umbral sale del entrenamiento. Se suma a "Hey Jarvis".
 VLOOMY_MODEL = Path(__file__).parent / 'modelos' / 'hey_vloomy.onnx'
 WAKE_MODELOS = {WAKE_MODEL: WAKE_UMBRAL}
@@ -82,7 +83,7 @@ SI = re.compile(r'^(?:si|dale|ok|okay|confirmo|confirmado|hacelo|de una|obvio)\b
 SISTEMA = """Sos Vloomy, el asistente personal por voz de tu usuario, al estilo Jarvis.
 Respondés en español rioplatense, en una o dos frases cortas, sin markdown ni listas: todo se lee en voz alta.
 Para actuar en la PC usá las herramientas. Si algo no se puede hacer con ellas, decilo en una frase.
-Las preguntas de conocimiento o cuentas respondelas directo, sin herramientas.
+Las preguntas de conocimiento respondelas directo. Para CUALQUIER cuenta usá calcular: nunca hagas cuentas de cabeza.
 Para abrir programas usá abrir_app. Para traer al frente una ventana ya abierta usá App con mode "switch".
 Si el pedido es largo o necesita investigar en internet, comparar, organizar archivos o programar, usá delegar_a_claude
 con la tarea bien explicada y decí que vas a avisar cuando esté.
@@ -100,6 +101,8 @@ LOCALES = [
                 {'accion': {'type': 'string', 'enum': capa0.ACCIONES_LOCALES}}),
     herramienta('abrir_app', 'Abre un programa del menú Inicio de Windows por su nombre (Calculadora, Spotify, Google Chrome).',
                 {'nombre': {'type': 'string'}}),
+    herramienta('calcular', 'Hace una cuenta exacta. Expresión con números y + - * / ** % // y paréntesis, '
+                'por ejemplo "15*7" o "3.5*60".', {'expresion': {'type': 'string'}}),
     herramienta('delegar_a_claude', 'Le pasa una tarea larga o compleja a Claude, que trabaja en segundo plano en la PC '
                 '(puede navegar, investigar y manejar archivos) y avisa por voz cuando termina.',
                 {'tarea': {'type': 'string'}}),
@@ -247,8 +250,12 @@ class Vloomy:
     def esperar_wake(self, oww):
         oww.reset()
         umbrales = {Path(ruta).stem: u for ruta, u in WAKE_MODELOS.items()}  # openWakeWord nombra por archivo
-        while not any(p >= umbrales[n] for n, p in oww.predict(self.mic.leer()).items()):
-            pass
+        seguidos = dict.fromkeys(umbrales, 0)
+        while True:
+            for nombre, p in oww.predict(self.mic.leer()).items():
+                seguidos[nombre] = seguidos[nombre] + 1 if p >= umbrales[nombre] else 0
+                if seguidos[nombre] >= WAKE_PACIENCIA:
+                    return
 
     def escuchar(self):
         """Graba desde que hablás hasta ~0,8 s de silencio. None si no dijiste nada."""
@@ -292,6 +299,8 @@ class Vloomy:
                 return capa0.ejecutar_local(args.get('accion'))
             if nombre == 'abrir_app':
                 return await asyncio.to_thread(capa0.abrir_app, args.get('nombre', ''))
+            if nombre == 'calcular':
+                return capa0.calcular(args.get('expresion', ''))
             if nombre == 'delegar_a_claude':
                 try:
                     await asyncio.to_thread(lambda: canal('/tarea', {'texto': args.get('tarea', '')}).close())
@@ -563,8 +572,12 @@ class Vloomy:
                 for t in (await self.mcp.list_tools()).tools if t.name in MCP_PERMITIDAS]
             tareas = [self.servidor().serve(), self.escuchar_canal()]
             if con_pc:
-                self.voz, self.mic, self.vad = Voz(), Microfono(), VAD()
-                tareas.append(self.loop_pc())
+                try:
+                    self.voz, self.mic, self.vad = Voz(), Microfono(), VAD()
+                    tareas.append(self.loop_pc())
+                except Exception as e:  # sin micrófono o parlantes: igual queda el servidor del celular
+                    self.voz = self.mic = None
+                    print(f'[pc] no pude abrir micrófono o parlantes ({e}); sigo solo con el celular')
             await asyncio.gather(*tareas)
 
 
