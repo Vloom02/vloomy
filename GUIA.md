@@ -179,6 +179,8 @@ siempre, en la PC y en el celular.
 | "No pude: estabas usando el mouse…" | Windows-MCP cede el control mientras usás mouse o teclado. Soltalos y repetí (solo afecta atajos y ventanas). |
 | La escucha del celular se cortó | Android a veces la mata para ahorrar batería. Abrí la app y tocá "Activar escucha". Después de reiniciar el celular también hay que activarla a mano (regla de Android 14+). |
 | "La capa 2 no está abierta" | Abrí `capa2.cmd`. |
+| En la PC no se oye a Vloomy | Vloomy habla por la salida predeterminada de Windows, que hoy es el **monitor LED (HDMI)**. Si no tiene parlantes, elegí tus parlantes o auriculares en Configuración → Sistema → Sonido → Salida. |
+| La PC no te escucha bien | Usa el micrófono predeterminado (hoy el **micrófono USB**). Subí su nivel en Configuración → Sistema → Sonido → Entrada. |
 
 ## Protocolo PC ↔ celular
 
