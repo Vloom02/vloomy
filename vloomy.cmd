@@ -1,5 +1,5 @@
 @echo off
-rem Arranca Vloomy (fase 1). Todo vive en D:\Claude\repos\vloomy.
+rem Arranca Vloomy en la PC (micro, parlantes y servidor para el celular).
 cd /d "%~dp0voice"
-".venv\Scripts\python.exe" vloomy.py
+".venv\Scripts\python.exe" vloomy.py %*
 pause

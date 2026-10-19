@@ -1,0 +1,66 @@
+# Vloomy: progreso y traspaso
+
+Archivo para retomar el trabajo desde una sesión nueva (por ejemplo, si se cortan los tokens).
+**Si este archivo se modificó hace menos de 45 minutos, hay otra sesión trabajando: no tocar nada.**
+
+## Pedido del usuario (19/10/2026, madrugada)
+
+"Jarvis" propio llamado **Vloomy**, manos libres, en **PC (Windows) y Android**. Para la mañana tiene que quedar
+listo para pruebas reales. El usuario autorizó instalar todo lo necesario y seguir sin consultarle.
+
+Restricciones:
+- **Costo cero extra.** Groq gratis (clave en `.env`), modelos locales y suscripción de Claude solo vía Claude Code oficial.
+- **Todo en el disco D**, dentro de `D:\Claude\repos\vloomy`: herramientas en `.tools`, modelos en `.cache`, Python en `.uv`.
+- Español rioplatense en código, textos y respuestas.
+- `.env` **nunca** se sube (tiene `GROQ_API_KEY` y `VLOOMY_TOKEN`).
+- Repo privado: https://github.com/Vloom02/vloomy. Hacer push después de cada etapa.
+- Nada de cambios de sistema: firewall, Modo desarrollador, servicios ni Tailscale los hace el usuario.
+
+## Estado
+
+- [x] Fase 1 PC: wake word "hey jarvis", VAD, voz a texto (Groq whisper-large-v3-turbo, respaldo faster-whisper small), capa 0, capa 1 (Groq gpt-oss-120b → gpt-oss-20b → Ollama qwen2.5:3b), voz Kokoro fp32 `em_alex` es-419.
+- [x] Abrir apps sin Windows-MCP (`capa0.abrir_app`: Get-StartApps + `shell:AppsFolder`). Windows-MCP solo para `Shortcut` (con confirmación) y `App` switch/resize.
+- [x] Servidor HTTP para el celular dentro de `voice/vloomy.py` (ver protocolo abajo). Probado con `voice/prueba.py`.
+- [x] Repo privado creado y subido.
+- [ ] Herramientas Android portables en `D:\Claude\repos\vloomy\.tools`: JDK 21, Android SDK (cmdline-tools, platform-tools, platforms;android-35, build-tools;35.0.0), Gradle.
+- [ ] App Android en `android/`: wake word openWakeWord en ONNX Runtime + VAD Silero + grabación → POST /voz → TTS de Android. Servicio en primer plano de tipo micrófono. APK de debug copiado a `Vloomy.apk` en la raíz.
+- [ ] Test JVM del wake word en Kotlin contra WAVs generados con Kokoro.
+- [ ] Capa 2: canal de Claude Code (`claude/channel`) + herramienta `delegar_a_claude`.
+- [ ] Entrenar "Hey Vloomy" con voces sintéticas de Kokoro y features de openWakeWord.
+- [ ] GUIA.md final: PC, celular y qué tiene que hacer el usuario a la mañana.
+
+## Cómo probar
+
+```powershell
+cd D:\Claude\repos\vloomy\voice
+.\.venv\Scripts\python.exe test_capa0.py   # comandos fijos, sin red
+.\.venv\Scripts\python.exe prueba.py       # punta a punta sin micrófono (usa Groq)
+```
+
+Para usar `uv` desde la app de Claude (MSIX virtualiza AppData), primero cargar las variables de `uv-env.ps1`
+(UV_PYTHON_INSTALL_DIR, UV_CACHE_DIR, UV_TOOL_DIR, UV_TOOL_BIN_DIR dentro de `.uv`, UV_PYTHON_PREFERENCE=only-managed).
+
+## Protocolo PC ↔ celular
+
+Todas las rutas exigen el header `Authorization: Bearer <VLOOMY_TOKEN>` (está en `.env`). Si falta, se genera solo.
+Puerto 8765 en 0.0.0.0. Se cambian con `VLOOMY_HOST` y `VLOOMY_PUERTO`.
+
+| Ruta | Envío | Respuesta |
+|---|---|---|
+| `GET /salud` | — | `{"ok": true, "nombre": "Vloomy"}` |
+| `POST /voz` | WAV mono 16 kHz 16 bits con el pedido, ya recortado | NDJSON, una línea por evento: `{"vos": texto}`, `{"decir": frase}`…, `{"preguntar": "¿Confirmo…?", "id": "abcd1234"}`, y por último `{"fin": true}` |
+| `POST /responder/{id}` | WAV con la respuesta a una confirmación | `{"ok": true, "texto": "..."}` |
+
+Cuando llega `preguntar`, la app lo dice, graba la respuesta y la manda a `/responder/{id}` mientras sigue leyendo
+el mismo stream de `/voz`.
+
+## Diseño de la app Android
+
+- Kotlin, sin Compose ni AndroidX salvo lo mínimo. minSdk 29 y target/compileSdk 35.
+- `WakeWord.kt` en Kotlin puro, testeable en la JVM con onnxruntime de escritorio. Es el port de `openwakeword/utils.py`:
+  melspectrogram.onnx → (x/10)+2 → ventanas de 76 frames de mel con paso 8 → embedding_model.onnx → últimas 16 → hey_jarvis_v0.1.onnx.
+  Los modelos se copian de `voice\.venv\Lib\site-packages\openwakeword\resources\models` a `assets`.
+- Servicio en primer plano `microphone` con notificación fija y wake lock parcial. Después del wake: bip, grabación con
+  VAD Silero (silero_vad.onnx, entradas input/h/c/sr), POST /voz, TextToSpeech es-AR frase por frase.
+- Pantalla: URL de la PC, token, botones "Activar escucha", "Probar conexión" y "Hablar" (push-to-talk).
+- Android 14+: el servicio de micrófono no puede arrancar desde BOOT_COMPLETED; se activa desde la app.

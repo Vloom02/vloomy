@@ -1,0 +1,5 @@
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.onnx binary
+*.wav binary
+*.jar binary

@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__vloomy__responder",
+      "mcp__playwright",
+      "Read",
+      "Glob",
+      "Grep",
+      "WebSearch",
+      "WebFetch",
+      "Write(D:\\Claude\\repos\\vloomy\\capa2\\resultados\\**)"
+    ],
+    "deny": [
+      "Bash(rm:*)",
+      "Bash(del:*)",
+      "Bash(Remove-Item:*)",
+      "Bash(format:*)",
+      "Bash(git push:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true
+}
