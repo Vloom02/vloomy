@@ -1,5 +1,6 @@
 *.cmd text eol=crlf
 *.bat text eol=crlf
+gradlew text eol=lf
 *.onnx binary
 *.wav binary
 *.jar binary
