@@ -9,9 +9,9 @@ import org.junit.Test
 class WakeWordTest {
     private fun wav(nombre: String) = Wav.leer(javaClass.getResourceAsStream("/$nombre")!!.use { it.readBytes() })
 
-    private fun maximo(nombre: String): Float = WakeWord(WakeWord.recurso("hey_jarvis_v0.1.onnx")).use { w ->
+    private fun maximo(nombre: String): Float = WakeWord(listOf(WakeWord.recurso("hey_jarvis_v0.1.onnx"))).use { w ->
         wav(nombre).toList().chunked(WakeWord.BLOQUE).filter { it.size == WakeWord.BLOQUE }
-            .maxOf { w.procesar(it.toShortArray()) }
+            .maxOf { w.procesar(it.toShortArray())[0] }
     }
 
     @Test

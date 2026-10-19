@@ -7,9 +7,10 @@ import java.nio.FloatBuffer
 
 /**
  * openWakeWord en Kotlin: el mismo cálculo que utils.AudioFeatures + Model.predict de Python.
- * Recibe bloques de 1280 muestras (80 ms a 16 kHz, PCM 16 bits) y devuelve un puntaje de 0 a 1.
+ * Recibe bloques de 1280 muestras (80 ms a 16 kHz, PCM 16 bits) y devuelve un puntaje de 0 a 1 por modelo
+ * (por ejemplo "hey jarvis" y "hey vloomy" a la vez, compartiendo el cálculo de features).
  */
-class WakeWord(modelo: ByteArray) : AutoCloseable {
+class WakeWord(modelos: List<ByteArray>) : AutoCloseable {
     private val env = OrtEnvironment.getEnvironment()
     private val opciones = OrtSession.SessionOptions().apply {
         setIntraOpNumThreads(1)
@@ -17,8 +18,7 @@ class WakeWord(modelo: ByteArray) : AutoCloseable {
     }
     private val melSesion = env.createSession(recurso("melspectrogram.onnx"), opciones)
     private val embSesion = env.createSession(recurso("embedding_model.onnx"), opciones)
-    private val wakeSesion = env.createSession(modelo, opciones)
-    private val wakeEntrada = wakeSesion.inputNames.first()
+    private val wakeSesiones = modelos.map { env.createSession(it, opciones) }
 
     private val crudo = ShortArray(CONTEXTO + BLOQUE)  // el bloque nuevo + 3 frames de contexto
     private val mel = ArrayDeque<FloatArray>()
@@ -41,7 +41,7 @@ class WakeWord(modelo: ByteArray) : AutoCloseable {
         predicciones = 0
     }
 
-    fun procesar(bloque: ShortArray): Float {
+    fun procesar(bloque: ShortArray): FloatArray {
         require(bloque.size == BLOQUE) { "el bloque tiene que tener $BLOQUE muestras" }
         System.arraycopy(crudo, BLOQUE, crudo, 0, CONTEXTO)
         System.arraycopy(bloque, 0, crudo, CONTEXTO, BLOQUE)
@@ -51,8 +51,12 @@ class WakeWord(modelo: ByteArray) : AutoCloseable {
         }
         features.addLast(embedding(mel.toList().takeLast(VENTANA_MEL)))
         if (features.size > FEATURES_MAX) features.removeFirst()
-        val puntaje = predecir(features.toList().takeLast(FEATURES_MODELO))
-        return if (predicciones++ < 5) 0f else puntaje  // Python ignora las primeras 5 predicciones
+        val ventana = entradaModelo(features.toList().takeLast(FEATURES_MODELO))
+        val puntajes = FloatArray(wakeSesiones.size) { i ->
+            val s = wakeSesiones[i]
+            correr(s, s.inputNames.first(), ventana, longArrayOf(1, FEATURES_MODELO.toLong(), EMB_DIM.toLong()))[0]
+        }
+        return if (predicciones++ < 5) FloatArray(puntajes.size) else puntajes  // Python ignora las primeras 5
     }
 
     private fun melspec(muestras: ShortArray): List<FloatArray> {
@@ -67,10 +71,10 @@ class WakeWord(modelo: ByteArray) : AutoCloseable {
         return correr(embSesion, "input_1", entrada, longArrayOf(1, VENTANA_MEL.toLong(), MEL_BINS.toLong(), 1))
     }
 
-    private fun predecir(ventana: List<FloatArray>): Float {
+    private fun entradaModelo(ventana: List<FloatArray>): FloatArray {
         val entrada = FloatArray(FEATURES_MODELO * EMB_DIM)
         ventana.forEachIndexed { i, f -> f.copyInto(entrada, i * EMB_DIM) }
-        return correr(wakeSesion, wakeEntrada, entrada, longArrayOf(1, FEATURES_MODELO.toLong(), EMB_DIM.toLong()))[0]
+        return entrada
     }
 
     private fun correr(sesion: OrtSession, nombre: String, datos: FloatArray, forma: LongArray): FloatArray =
@@ -84,7 +88,7 @@ class WakeWord(modelo: ByteArray) : AutoCloseable {
     override fun close() {
         melSesion.close()
         embSesion.close()
-        wakeSesion.close()
+        wakeSesiones.forEach { it.close() }
     }
 
     companion object {
@@ -97,8 +101,18 @@ class WakeWord(modelo: ByteArray) : AutoCloseable {
         private const val FEATURES_MODELO = 16
         private const val FEATURES_MAX = 120
 
-        fun recurso(nombre: String): ByteArray =
+        fun recurso(nombre: String): ByteArray = recursoOpcional(nombre) ?: error("falta el modelo $nombre")
+
+        fun recursoOpcional(nombre: String): ByteArray? =
             WakeWord::class.java.getResourceAsStream("/models/$nombre")?.use { it.readBytes() }
-                ?: error("falta el modelo $nombre")
+
+        /** Modelos de palabra de activación incluidos y su umbral (el de "hey vloomy" sale del entrenamiento). */
+        fun incluidos(): List<Pair<ByteArray, Float>> = listOfNotNull(
+            recurso("hey_jarvis_v0.1.onnx") to 0.5f,
+            recursoOpcional("hey_vloomy.onnx")?.let { modelo ->
+                val json = String(recurso("hey_vloomy.json"))
+                modelo to Regex("\"umbral\"\\s*:\\s*([0-9.]+)").find(json)!!.groupValues[1].toFloat()
+            },
+        )
     }
 }

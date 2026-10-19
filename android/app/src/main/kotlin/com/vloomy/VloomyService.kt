@@ -76,14 +76,17 @@ class VloomyService : Service() {
         val minimo = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         val grabador = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, 16000, AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT, maxOf(minimo, WakeWord.BLOQUE * 2 * 8))
+        val modelos = WakeWord.incluidos()  // "hey jarvis" y, si está entrenado, "hey vloomy"
+        val umbrales = modelos.map { it.second }
         try {
-            WakeWord(WakeWord.recurso("hey_jarvis_v0.1.onnx")).use { wake ->
+            WakeWord(modelos.map { it.first }).use { wake ->
                 Vad().use { vad ->
                     grabador.startRecording()
                     val bloque = ShortArray(WakeWord.BLOQUE)
                     while (activo) {
                         leer(grabador, bloque)
-                        if (forzar || wake.procesar(bloque) >= WAKE_UMBRAL) {
+                        val puntajes = wake.procesar(bloque)
+                        if (forzar || puntajes.indices.any { puntajes[it] >= umbrales[it] }) {
                             forzar = false
                             atender(grabador, vad, servidor)
                             vaciar(grabador)
@@ -197,7 +200,6 @@ class VloomyService : Service() {
         const val HABLAR = "com.vloomy.HABLAR"
         private const val CANAL = "escucha"
         private const val TAG = "Vloomy"
-        private const val WAKE_UMBRAL = 0.5f
         private const val VAD_UMBRAL = 0.5f
         private const val SILENCIO_FIN = 10   // ~0,8 s callado = terminaste de hablar
         private const val ESPERA_MAX = 62     // ~5 s sin que digas nada = falsa alarma

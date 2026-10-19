@@ -22,12 +22,12 @@ Restricciones:
 - [x] Abrir apps sin Windows-MCP (`capa0.abrir_app`: Get-StartApps + `shell:AppsFolder`). Windows-MCP solo para `Shortcut` (con confirmación) y `App` switch/resize.
 - [x] Servidor HTTP para el celular dentro de `voice/vloomy.py` (ver protocolo abajo). Probado con `voice/prueba.py`.
 - [x] Repo privado creado y subido.
-- [ ] Herramientas Android portables en `D:\Claude\repos\vloomy\.tools`: JDK 21, Android SDK (cmdline-tools, platform-tools, platforms;android-35, build-tools;35.0.0), Gradle.
-- [ ] App Android en `android/`: wake word openWakeWord en ONNX Runtime + VAD Silero + grabación → POST /voz → TTS de Android. Servicio en primer plano de tipo micrófono. APK de debug copiado a `Vloomy.apk` en la raíz.
-- [ ] Test JVM del wake word en Kotlin contra WAVs generados con Kokoro.
-- [ ] Capa 2: canal de Claude Code (`claude/channel`) + herramienta `delegar_a_claude`.
-- [ ] Entrenar "Hey Vloomy" con voces sintéticas de Kokoro y features de openWakeWord.
-- [ ] GUIA.md final: PC, celular y qué tiene que hacer el usuario a la mañana.
+- [x] Herramientas Android portables en `D:\Claude\repos\vloomy\.tools`: JDK 21, Android SDK 35, Gradle 8.11.1 (wrapper en `android/`). Gradle usa `.tools\gradle-home`.
+- [x] App Android en `android/` (APK en `Vloomy.apk`, se recompila con `android\build.cmd`).
+- [x] Test JVM del wake word en Kotlin: 0,9978 contra 0,998 de Python con el mismo WAV.
+- [x] Capa 2: `capa2/canal.mjs` + `delegar_a_claude` + avisos y permisos por voz. Test: `capa2\test_canal.py`. El usuario tiene que iniciar sesión en `capa2.cmd`.
+- [ ] Entrenar "Hey Vloomy" (`voice\entrenar_wake.py`) → `voice\modelos\hey_vloomy.onnx` + `.json` con el umbral; copiar ambos a `android\wake\src\main\resources\models\` y recompilar. La PC y la app ya cargan el modelo solas si existe.
+- [ ] GUIA.md: completar la sección "Palabra de activación" (`{{WAKE}}`) con las métricas del entrenamiento.
 
 ## Cómo probar
 

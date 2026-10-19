@@ -46,8 +46,13 @@ load_dotenv(ROOT / '.env')
 
 SR = 16000
 CHUNK = 1280                  # 80 ms, el bloque que espera openWakeWord
-WAKE_MODEL = openwakeword.models['hey_jarvis']['model_path']  # provisorio hasta entrenar "hey vloomy"
+WAKE_MODEL = openwakeword.models['hey_jarvis']['model_path']
 WAKE_UMBRAL = 0.5
+# "Hey Vloomy" propio (entrenar_wake.py); su umbral sale del entrenamiento. Se suma a "Hey Jarvis".
+VLOOMY_MODEL = Path(__file__).parent / 'modelos' / 'hey_vloomy.onnx'
+WAKE_MODELOS = {WAKE_MODEL: WAKE_UMBRAL}
+if VLOOMY_MODEL.exists():
+    WAKE_MODELOS[str(VLOOMY_MODEL)] = json.loads(VLOOMY_MODEL.with_suffix('.json').read_text())['umbral']
 VAD_UMBRAL = 0.5
 SILENCIO_FIN = 10             # ~0,8 s callado = terminaste de hablar
 ESPERA_MAX = 62               # ~5 s sin que digas nada = falsa alarma
@@ -131,6 +136,17 @@ def token_celular():
             f.write(f'\nVLOOMY_TOKEN={token}\n')
         os.environ['VLOOMY_TOKEN'] = token
     return token
+
+
+def ip_local():
+    """IP de esta PC en la red (la que va en la app del celular). El UDP no manda nada: solo elige la interfaz."""
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        try:
+            s.connect(('8.8.8.8', 80))
+            return s.getsockname()[0]
+        except OSError:
+            return '<IP de esta PC>'
 
 
 def canal(ruta, datos=None, timeout=10):
@@ -230,8 +246,8 @@ class Vloomy:
 
     def esperar_wake(self, oww):
         oww.reset()
-        nombre = next(iter(oww.models))
-        while oww.predict(self.mic.leer())[nombre] < WAKE_UMBRAL:
+        umbrales = {Path(ruta).stem: u for ruta, u in WAKE_MODELOS.items()}  # openWakeWord nombra por archivo
+        while not any(p >= umbrales[n] for n, p in oww.predict(self.mic.leer()).items()):
             pass
 
     def escuchar(self):
@@ -385,8 +401,9 @@ class Vloomy:
         return bool(SI.match(capa0.normalizar(texto)))
 
     async def loop_pc(self):
-        oww = Model(wakeword_model_paths=[WAKE_MODEL])
-        print('Vloomy listo. Decí "Hey Jarvis" y tu pedido.')
+        oww = Model(wakeword_model_paths=list(WAKE_MODELOS))
+        print('Vloomy listo. Decí "Hey Vloomy" o "Hey Jarvis" y tu pedido.' if len(WAKE_MODELOS) > 1
+              else 'Vloomy listo. Decí "Hey Jarvis" y tu pedido.')
         self.voz.decir('Vloomy listo.')
         while True:
             self.voz.esperar()
@@ -535,7 +552,7 @@ class Vloomy:
         asegurar_ollama()
         threading.Thread(target=capa0.apps_instaladas, daemon=True).start()  # precarga el menú Inicio
         self.turnos = asyncio.Lock()
-        print(f'Celular: http://<IP de esta PC>:{PUERTO}   token: {token_celular()}')
+        print(f'Celular: http://{ip_local()}:{PUERTO}   token: {token_celular()}')
         params = StdioServerParameters(command=str(WINDOWS_MCP), args=['serve', '--tools', ','.join(MCP_PERMITIDAS)],
                                        env={**os.environ})
         async with stdio_client(params) as (r, w), ClientSession(r, w) as self.mcp:
