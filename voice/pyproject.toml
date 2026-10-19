@@ -1,0 +1,18 @@
+[project]
+name = "vloomy-voice"
+version = "0.1.0"
+description = "Vloomy: asistente por voz (PC + servidor para el celular)"
+requires-python = ">=3.12"
+dependencies = [
+    "faster-whisper>=1.2.1",
+    "kokoro-onnx>=0.6.1",
+    "mcp>=2.3.0",
+    "numpy>=2.5.4",
+    "openai>=3.35.1",
+    "openwakeword>=0.4.0",
+    "python-dotenv>=1.2.4",
+    "scipy>=1.18.1",
+    "sounddevice>=0.5.6",
+    "starlette>=1.9.0",
+    "uvicorn>=0.54.0",
+]

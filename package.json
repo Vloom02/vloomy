@@ -1,0 +1,11 @@
+{
+    "name": "vloomy",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "Vloomy: asistente personal. Cerebro en la PC, clientes en Android.",
+    "dependencies": {
+        "@modelcontextprotocol/server-filesystem": "^1.0.0",
+        "@playwright/mcp": "^0.0.83"
+    }
+}
