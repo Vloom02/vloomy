@@ -121,7 +121,7 @@ async def main():
     # Servidor del celular: HTTP real, token y respuesta en streaming.
     v.ejecutar = ejecutar_real
     v.herramientas = list(V.LOCALES)
-    servidor = asyncio.create_task(v.correr(con_pc=False))
+    servidor = asyncio.create_task(v.correr(con_pc=False, con_panel=False))
     await asyncio.sleep(4)
     token = V.token_celular()
     wav = V.a_wav(voz_16k(tts, '¿Cuánto es quince por siete?'))

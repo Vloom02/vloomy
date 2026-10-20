@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vloomy</title>
+<style>
+  :root {
+    --noche: #0F1A2E;     /* fondo */
+    --tinta: #16233D;     /* superficies: lo que decís vos, el cuadro de texto */
+    --borde: #24365A;
+    --bruma: #A9C4D6;     /* tu voz */
+    --ambar: #F0B65A;     /* la voz de Vloomy */
+    --pizarra: #5B6E8C;   /* secundario */
+    --coral: #E86A7A;     /* apagado, errores */
+    --texto: #E3EAF2;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--noche);
+    color: var(--texto);
+    font-family: "Bahnschrift", "DIN Alternate", "Roboto Condensed", system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.45;
+    display: grid;
+    grid-template-rows: auto auto 1fr auto auto;
+    max-width: 640px;
+    margin-inline: auto;
+  }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--bruma); outline-offset: 2px; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px 0;
+  }
+  .marca { font-size: 22px; font-weight: 600; letter-spacing: 0.02em; margin: 0; }
+  .interruptores { display: flex; gap: 6px; }
+  .interruptor {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: transparent; border: 1px solid var(--borde); border-radius: 999px;
+    padding: 5px 11px 5px 9px; cursor: pointer; color: var(--bruma); font-size: 13px;
+  }
+  .interruptor svg { width: 16px; height: 16px; }
+  .interruptor[aria-pressed="false"] { color: var(--coral); border-color: color-mix(in srgb, var(--coral) 50%, transparent); }
+  .interruptor[aria-pressed="false"] .tachado { display: inline; }
+  .tachado { display: none; }
+  .interruptor:disabled { opacity: 0.4; cursor: default; }
+
+  /* El anillo de presencia: lo único que se mueve solo. */
+  .presencia { display: grid; justify-items: center; padding: 6px 0 4px; }
+  .anillo { width: 168px; height: 168px; color: var(--pizarra); transition: color 300ms; }
+  .anillo circle { fill: none; stroke: currentColor; }
+  .nucleo { fill: currentColor !important; stroke: none !important; opacity: 0.9; transform-origin: 100px 100px; }
+  .aro { stroke-width: 2; transform-origin: 100px 100px; }
+  .orbita { stroke-width: 1.5; stroke-dasharray: 3 9; opacity: 0; transform-origin: 100px 100px; }
+  .onda { stroke-width: 1.5; opacity: 0; transform-origin: 100px 100px; }
+  .estado {
+    margin: 4px 0 0; font-size: 19px; font-weight: 300; font-stretch: 85%;
+    color: var(--bruma); min-height: 1.45em; text-align: center;
+  }
+
+  body[data-estado="esperando"] .anillo { color: var(--pizarra); }
+  body[data-estado="esperando"] .aro { animation: respirar 4.5s ease-in-out infinite; }
+  body[data-estado="escuchando"] .anillo { color: var(--bruma); }
+  body[data-estado="escuchando"] .aro { animation: abrir 1.1s ease-in-out infinite alternate; }
+  body[data-estado="escuchando"] .nucleo { transform: scale(1.12); }
+  body[data-estado="pensando"] .anillo { color: var(--ambar); }
+  body[data-estado="pensando"] .orbita { opacity: 1; animation: girar 2.4s linear infinite; }
+  body[data-estado="hablando"] .anillo { color: var(--ambar); }
+  body[data-estado="hablando"] .onda { animation: onda 1.8s ease-out infinite; }
+  body[data-estado="hablando"] .onda:nth-of-type(2) { animation-delay: 0.6s; }
+  body[data-estado="hablando"] .onda:nth-of-type(3) { animation-delay: 1.2s; }
+  body[data-estado="silenciado"] .anillo, body[data-estado="desconectado"] .anillo { color: var(--coral); }
+  body[data-estado="silenciado"] .nucleo, body[data-estado="desconectado"] .nucleo { opacity: 0.35; }
+  body[data-estado="silenciado"] .estado, body[data-estado="desconectado"] .estado { color: var(--coral); }
+
+  @keyframes respirar { 50% { transform: scale(1.06); opacity: 0.55; } }
+  @keyframes abrir { to { transform: scale(1.16); } }
+  @keyframes girar { to { transform: rotate(360deg); } }
+  @keyframes onda { from { transform: scale(0.75); opacity: 0.8; } to { transform: scale(1.35); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .anillo * { animation: none !important; }
+    body[data-estado="pensando"] .orbita, body[data-estado="hablando"] .onda { opacity: 0.6; transform: none; }
+  }
+
+  .charla {
+    overflow-y: auto; padding: 8px 16px 12px;
+    display: flex; flex-direction: column; gap: 10px;
+    border-top: 1px solid var(--borde);
+    scrollbar-color: var(--borde) transparent;
+  }
+  .vacio { margin: auto; color: var(--pizarra); text-align: center; max-width: 30ch; }
+  .msj { max-width: 85%; margin: 0; overflow-wrap: anywhere; }
+  .msj.vloomy { align-self: flex-start; color: var(--ambar); }
+  .msj.vos {
+    align-self: flex-end; color: var(--bruma);
+    background: var(--tinta); border-radius: 14px 14px 4px 14px; padding: 7px 11px;
+  }
+  .origen { display: block; font-size: 12px; color: var(--pizarra); font-stretch: 85%; }
+  .msj.vos .origen { text-align: right; }
+
+  .claude { border-top: 1px solid var(--borde); padding: 10px 16px; max-height: 32vh; overflow-y: auto; }
+  .claude[hidden] { display: none; }
+  .claude h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; color: var(--pizarra); }
+  .tarea { display: grid; grid-template-columns: 10px 1fr; gap: 2px 10px; margin: 0 0 8px; }
+  .punto { width: 8px; height: 8px; border-radius: 50%; margin-top: 7px; background: var(--ambar); }
+  .tarea[data-estado="trabajando"] .punto { animation: titilar 1.4s ease-in-out infinite; }
+  .tarea[data-estado="terminada"] .punto { background: var(--bruma); }
+  .tarea[data-estado="error"] .punto { background: var(--coral); }
+  .tarea p { margin: 0; }
+  .tarea .resultado { grid-column: 2; color: var(--pizarra); font-size: 13px; }
+  @keyframes titilar { 50% { opacity: 0.25; } }
+  .archivos { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  .archivos a {
+    color: var(--bruma); text-decoration: none; font-size: 13px;
+    border: 1px solid var(--borde); border-radius: 6px; padding: 3px 8px; display: inline-block;
+  }
+  .archivos a:hover { border-color: var(--bruma); }
+
+  form {
+    display: grid; grid-template-columns: auto 1fr auto; gap: 8px;
+    padding: 10px 16px 16px; border-top: 1px solid var(--borde);
+  }
+  form input {
+    background: var(--tinta); border: 1px solid var(--borde); border-radius: 10px;
+    padding: 10px 12px; min-width: 0;
+  }
+  form input::placeholder { color: var(--pizarra); }
+  form button {
+    background: var(--tinta); border: 1px solid var(--borde); border-radius: 10px;
+    padding: 0 14px; cursor: pointer; color: var(--bruma);
+  }
+  form button.enviar { background: var(--ambar); border-color: var(--ambar); color: var(--noche); font-weight: 600; }
+  form button.hablar { display: inline-flex; align-items: center; gap: 6px; }
+  form button:disabled { opacity: 0.4; cursor: default; }
+  form button.hablar svg { width: 16px; height: 16px; }
+</style>
+</head>
+<body data-estado="desconectado">
+  <header>
+    <h1 class="marca">Vloomy</h1>
+    <div class="interruptores">
+      <button type="button" class="interruptor" id="mic" aria-pressed="true" title="Prender o apagar el micrófono">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>
+          <path class="tachado" d="M4 4l16 16"/>
+        </svg>Micrófono
+      </button>
+      <button type="button" class="interruptor" id="voz" aria-pressed="true" title="Prender o apagar la voz de Vloomy">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/>
+          <path class="tachado" d="M4 4l16 16"/>
+        </svg>Voz
+      </button>
+    </div>
+  </header>
+
+  <section class="presencia" aria-label="Estado de Vloomy">
+    <svg class="anillo" viewBox="0 0 200 200" aria-hidden="true">
+      <circle class="onda" cx="100" cy="100" r="62"/>
+      <circle class="onda" cx="100" cy="100" r="62"/>
+      <circle class="onda" cx="100" cy="100" r="62"/>
+      <circle class="orbita" cx="100" cy="100" r="84"/>
+      <circle class="aro" cx="100" cy="100" r="62"/>
+      <circle class="nucleo" cx="100" cy="100" r="30"/>
+    </svg>
+    <p class="estado" id="estado" role="status" aria-live="polite">Conectando con Vloomy</p>
+  </section>
+
+  <main class="charla" id="charla" aria-live="polite">
+    <p class="vacio" id="vacio">Decí «Hey Vloomy» o escribile abajo.</p>
+  </main>
+
+  <section class="claude" id="claude" hidden aria-label="Tareas de Claude">
+    <h2>Tareas de Claude</h2>
+    <div id="tareas"></div>
+    <ul class="archivos" id="archivos"></ul>
+  </section>
+
+  <form id="pedido" autocomplete="off">
+    <button type="button" class="hablar" id="hablar" title="Escuchar sin decir la palabra">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>
+      </svg>Hablar
+    </button>
+    <input id="texto" name="texto" placeholder="Escribile a Vloomy" aria-label="Pedido escrito" maxlength="2000">
+    <button type="submit" class="enviar">Enviar</button>
+  </form>
+
+<script>
+const ESTADOS = {
+  esperando: 'Esperando «Hey Vloomy»',
+  escuchando: 'Te escucho',
+  pensando: 'Pensando',
+  hablando: 'Hablando',
+  silenciado: 'Micrófono apagado',
+  desconectado: 'Sin conexión con Vloomy. Abrí vloomy.cmd.',
+};
+const ORIGEN = { celular: 'desde el celular', panel: 'escrito' };
+const $ = (id) => document.getElementById(id);
+const charla = $('charla');
+
+function ponerEstado(estado) {
+  document.body.dataset.estado = estado;
+  $('estado').textContent = ESTADOS[estado] || estado;
+}
+
+function agregar(quien, texto, origen, t) {
+  $('vacio').hidden = true;
+  const ultimo = charla.lastElementChild;
+  // Vloomy habla frase por frase: las frases de una misma respuesta (dichas con menos de 4 s entre sí) van en el
+  // mismo bloque; un aviso que llega después (por ejemplo, lo que terminó Claude) va aparte.
+  if (quien === 'vloomy' && ultimo && ultimo.classList.contains('vloomy') &&
+      ultimo.dataset.origen === (origen || '') && t - Number(ultimo.dataset.t) < 4) {
+    ultimo.querySelector('.texto').textContent += ' ' + texto;
+    ultimo.dataset.t = t;
+  } else {
+    const p = document.createElement('p');
+    p.className = 'msj ' + quien;
+    p.dataset.origen = origen || '';
+    p.dataset.t = t;
+    const cuerpo = document.createElement('span');
+    cuerpo.className = 'texto';
+    cuerpo.textContent = texto;
+    p.append(cuerpo);
+    if (ORIGEN[origen]) {
+      const o = document.createElement('span');
+      o.className = 'origen';
+      o.textContent = ORIGEN[origen];
+      p.append(o);
+    }
+    charla.append(p);
+    while (charla.querySelectorAll('.msj').length > 80) charla.querySelector('.msj').remove();
+  }
+  charla.scrollTop = charla.scrollHeight;
+}
+
+function ponerTarea(t) {
+  $('claude').hidden = false;
+  let el = document.querySelector(`.tarea[data-id="${CSS.escape(t.id)}"]`);
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'tarea';
+    el.dataset.id = t.id;
+    el.innerHTML = '<span class="punto" aria-hidden="true"></span><p class="pedido"></p><p class="resultado"></p>';
+    $('tareas').prepend(el);
+  }
+  el.dataset.estado = t.estado;
+  el.querySelector('.pedido').textContent = t.texto;
+  el.querySelector('.resultado').textContent = t.estado === 'trabajando' ? 'Trabajando…' : t.resultado;
+}
+
+async function cargarResultados() {
+  const lista = await fetch('/panel/resultados').then((r) => r.json()).catch(() => []);
+  const ul = $('archivos');
+  ul.replaceChildren(...lista.map((a) => {
+    const li = document.createElement('li');
+    const link = document.createElement('a');
+    link.href = '/panel/resultados/' + encodeURIComponent(a.nombre);
+    link.target = '_blank';
+    link.textContent = a.nombre;
+    li.append(link);
+    return li;
+  }));
+  if (lista.length) $('claude').hidden = false;
+}
+
+function ponerConfig(c) {
+  $('mic').setAttribute('aria-pressed', String(c.mic));
+  $('voz').setAttribute('aria-pressed', String(c.voz));
+  $('voz').disabled = !c.hay_voz;
+  $('hablar').disabled = !c.hay_voz;
+}
+
+const control = (accion) => fetch('/panel/control', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accion }),
+});
+$('mic').onclick = () => control('mic');
+$('voz').onclick = () => control('voz');
+$('hablar').onclick = () => control('hablar');
+
+$('pedido').onsubmit = async (e) => {
+  e.preventDefault();
+  const texto = $('texto').value.trim();
+  if (!texto) return;
+  $('texto').value = '';
+  const r = await fetch('/panel/texto', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto }),
+  }).catch(() => null);
+  if (!r || !r.ok) agregar('vloomy', 'No pude mandarle el pedido a Vloomy. ¿Está abierto vloomy.cmd?', 'panel', Date.now() / 1000);
+};
+
+const eventos = new EventSource('/panel/eventos');
+eventos.onerror = () => ponerEstado('desconectado');
+eventos.onmessage = (e) => {
+  const ev = JSON.parse(e.data);
+  if (ev.tipo === 'inicio') {
+    // Al (re)conectar, el servidor manda de nuevo la historia: empiezo de cero para no duplicar.
+    charla.querySelectorAll('.msj').forEach((m) => m.remove());
+    $('vacio').hidden = false;
+    $('tareas').replaceChildren();
+    cargarResultados();
+  } else if (ev.tipo === 'estado') ponerEstado(ev.estado);
+  else if (ev.tipo === 'vos') agregar('vos', ev.texto, ev.origen, ev.t);
+  else if (ev.tipo === 'vloomy') agregar('vloomy', ev.texto, ev.origen, ev.t);
+  else if (ev.tipo === 'config') ponerConfig(ev);
+  else if (ev.tipo === 'tarea') {
+    ponerTarea(ev);
+    if (ev.estado !== 'trabajando') cargarResultados();
+  }
+};
+</script>
+</body>
+</html>
