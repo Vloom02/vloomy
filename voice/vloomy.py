@@ -634,6 +634,9 @@ class _Tee:
         for s in self.salidas:
             s.flush()
 
+    def __getattr__(self, nombre):  # isatty, encoding, fileno…: los responde la consola (uvicorn los usa)
+        return getattr(self.salidas[0], nombre)
+
 
 if __name__ == '__main__':
     import sys

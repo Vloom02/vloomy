@@ -134,6 +134,29 @@ async def main():
     assert estado == 200 and eventos[0].get('vos') and eventos[-1] == {'fin': True, 'seguir': True}
     assert any('105' in e.get('decir', '') or 'ciento cinco' in e.get('decir', '').lower() for e in eventos)
     servidor.cancel()
+
+    # Arranque real como programa (con vloomy.log), como lo hace vloomy.cmd: tiene que levantar el servidor.
+    import subprocess, sys
+    env = {**os.environ, 'VLOOMY_HOST': '127.0.0.1', 'VLOOMY_PUERTO': '8798', 'PYTHONIOENCODING': 'utf-8'}
+    proc = subprocess.Popen([sys.executable, 'vloomy.py', '--sin-pc'], env=env,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        vivo = False
+        for _ in range(60):
+            await asyncio.sleep(0.5)
+            req = urllib.request.Request('http://127.0.0.1:8798/salud')
+            try:
+                urllib.request.urlopen(req, timeout=2)
+            except urllib.error.HTTPError as e:
+                vivo = e.code == 401
+            except OSError:
+                pass
+            if vivo or proc.poll() is not None:
+                break
+        assert vivo, f'vloomy.py no arrancó (código {proc.poll()}); mirá vloomy.log'
+        print('arranque real de vloomy.py: ok')
+    finally:
+        proc.kill()
     print('ok')
 
 asyncio.run(main())
