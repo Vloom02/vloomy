@@ -78,7 +78,10 @@ VOZ, IDIOMA = 'em_alex', 'es-419'
 # Servidor para el celular. 0.0.0.0 = lo ve tu red (Wi-Fi o Tailscale); siempre exige el token.
 HOST = os.environ.get('VLOOMY_HOST', '0.0.0.0')
 PUERTO = int(os.environ.get('VLOOMY_PUERTO', '8765'))
-CANAL = os.environ.get('VLOOMY_CANAL', 'http://127.0.0.1:8788')  # capa 2: capa2/canal.mjs dentro de Claude Code
+# Capa 2: Claude Code oficial, sin ventana, con tu suscripción. Trabaja en capa2/ (CLAUDE.md, permisos, Playwright).
+CLAUDE_EXE = ROOT / 'node_modules' / '@anthropic-ai' / 'claude-code' / 'bin' / 'claude.exe'
+CAPA2 = ROOT / 'capa2'
+CLAUDE_TIEMPO_MAX = 30 * 60  # segundos
 
 MCP_PERMITIDAS = {'App', 'Shortcut'}
 APP_MODOS = {'switch', 'resize'}  # abrir lo hace capa0.abrir_app; 'launch_executable' correría cualquier programa
@@ -159,13 +162,22 @@ def ip_local():
             return '<IP de esta PC>'
 
 
-def canal(ruta, datos=None, timeout=10):
-    """Pedido HTTP al canal de la capa 2 (mismo token que el celular)."""
-    req = urllib.request.Request(CANAL + ruta, method='GET' if datos is None else 'POST',
-                                 data=None if datos is None else json.dumps(datos).encode(),
-                                 headers={'Authorization': f'Bearer {token_celular()}',
-                                          'Content-Type': 'application/json'})
-    return urllib.request.urlopen(req, timeout=timeout)
+def resumen_claude(salida, error):
+    """Qué decir según lo que devolvió `claude -p --output-format json`."""
+    if 'has not been trusted' in error:
+        return 'Claude no tiene permisos en su carpeta: abrí capa2.cmd una vez y aceptá confiar en la carpeta.'
+    lineas = [l for l in salida.splitlines() if l.startswith('{')]
+    if not lineas:
+        return f'Claude no respondió bien: {error.strip()[-200:] or "sin salida"}'
+    r = json.loads(lineas[-1])
+    texto = (r.get('result') or '').strip()
+    if r.get('is_error'):
+        if 'login' in texto.lower():
+            return 'Claude no tiene la sesión iniciada: abrí capa2.cmd una vez e iniciá sesión.'
+        return f'Claude tuvo un problema: {texto}'
+    negadas = sorted({d.get('tool_name', '?') for d in r.get('permission_denials', [])})
+    extra = f" No lo dejé usar: {', '.join(negadas)}." if negadas else ''
+    return f'Claude terminó: {texto}{extra}'
 
 
 def asegurar_ollama():
@@ -314,10 +326,9 @@ class Vloomy:
             if nombre == 'calcular':
                 return capa0.calcular(args.get('expresion', ''))
             if nombre == 'delegar_a_claude':
-                try:
-                    await asyncio.to_thread(lambda: canal('/tarea', {'texto': args.get('tarea', '')}).close())
-                except OSError:
-                    return 'La capa 2 no está abierta: hay que arrancar capa2.cmd en la PC.'
+                if not CLAUDE_EXE.exists():
+                    return 'No encuentro Claude Code instalado en el proyecto.'
+                asyncio.create_task(self.trabajar_claude(args.get('tarea', '')))
                 return 'Se la pasé a Claude; trabaja en segundo plano y avisa cuando termine.'
             if nombre not in MCP_PERMITIDAS:
                 return f'La herramienta {nombre} no está permitida.'
@@ -479,34 +490,24 @@ class Vloomy:
         if self.voz:
             self.voz.decir(texto)
 
-    async def escuchar_canal(self):
-        """Respuestas y pedidos de permiso de Claude Code. Si la capa 2 no está abierta, reintenta cada 10 s."""
-        loop, eventos = asyncio.get_running_loop(), asyncio.Queue()
-
-        def leer():
-            while True:
-                try:
-                    with canal('/eventos', timeout=None) as r:
-                        for linea in r:
-                            loop.call_soon_threadsafe(eventos.put_nowait, json.loads(linea))
-                except (OSError, ValueError):
-                    time.sleep(10)
-
-        threading.Thread(target=leer, daemon=True).start()
-        while True:
-            e = await eventos.get()
-            if e.get('tipo') == 'respuesta':
-                self.avisar(f"Claude terminó: {e['texto']}")
-            elif e.get('tipo') == 'permiso':
-                asyncio.create_task(self.permiso_capa2(e))
-
-    async def permiso_capa2(self, e):
-        if not self.voz:  # sin micrófono en la PC: queda pendiente en la terminal de capa2.cmd
-            return self.avisar(f"Claude necesita permiso para {e['tool_name']}. Aprobalo en la PC.")
-        async with self.turnos:
-            permitir = await self.confirmar_pc(f"Claude quiere usar {e['tool_name']}: {e['description']}. ¿Lo dejo?")
-        await asyncio.to_thread(lambda: canal('/veredicto', {'request_id': e['request_id'],
-                                                             'permitir': permitir}).close())
+    async def trabajar_claude(self, tarea):
+        """Corre Claude Code sin ventana (con tu suscripción) y dice el resultado cuando termina.
+        Sin preguntas a mitad de camino: solo usa lo permitido en capa2/.claude/settings.json; lo demás se niega."""
+        print(f'[capa 2] empieza: {tarea}')
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                str(CLAUDE_EXE), '-p', '--output-format', 'json', cwd=CAPA2,
+                stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                creationflags=subprocess.CREATE_NO_WINDOW)
+            try:
+                # La tarea va por stdin, no como argumento: ningún texto dictado se interpreta como comando.
+                salida, error = await asyncio.wait_for(proc.communicate(tarea.encode('utf-8')), CLAUDE_TIEMPO_MAX)
+            except asyncio.TimeoutError:
+                proc.kill()
+                return self.avisar('Claude tardó demasiado y corté la tarea.')
+            self.avisar(resumen_claude(salida.decode('utf-8', 'replace'), error.decode('utf-8', 'replace')))
+        except Exception as e:
+            self.avisar(f'No pude usar a Claude: {e}')
 
     # ---------- celular ----------
 
@@ -607,7 +608,7 @@ class Vloomy:
                 {'type': 'function', 'function': {'name': t.name, 'description': t.description,
                                                   'parameters': t.input_schema}}
                 for t in (await self.mcp.list_tools()).tools if t.name in MCP_PERMITIDAS]
-            tareas = [self.servidor().serve(), self.escuchar_canal()]
+            tareas = [self.servidor().serve()]
             if con_pc:
                 try:
                     self.voz, self.mic, self.vad = Voz(), Microfono(), VAD()

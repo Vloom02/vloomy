@@ -1,9 +1,5 @@
 {
   "mcpServers": {
-    "vloomy": {
-      "command": "node",
-      "args": ["./canal.mjs"]
-    },
     "playwright": {
       "command": "node",
       "args": ["../node_modules/@playwright/mcp/cli.js", "--browser", "msedge"]

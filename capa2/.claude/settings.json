@@ -1,7 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "mcp__vloomy__responder",
       "mcp__playwright",
       "Read",
       "Glob",

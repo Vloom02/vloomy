@@ -61,6 +61,13 @@ async def main():
     for pedido in ['Gracias, ahora abrí Spotify', '¿Qué hora es?', 'Listo, poné música']:
         assert not V.FIN_CHARLA.match(capa0.normalizar(pedido)), pedido
 
+    # Capa 2: cómo se resume lo que devuelve `claude -p --output-format json`.
+    ok = json.dumps({'is_error': False, 'result': 'Los mejores son X e Y.',
+                     'permission_denials': [{'tool_name': 'Bash'}]})
+    assert V.resumen_claude(ok, '') == 'Claude terminó: Los mejores son X e Y. No lo dejé usar: Bash.'
+    assert 'iniciá sesión' in V.resumen_claude(json.dumps({'is_error': True, 'result': 'Not logged in · Please run /login'}), '')
+    assert 'confiar' in V.resumen_claude('', 'this workspace has not been trusted')
+
     v = V.Vloomy()
     tts = Kokoro(str(V.KOKORO / 'kokoro-v1.0.onnx'), str(V.KOKORO / 'voices-v1.0.bin'))
 

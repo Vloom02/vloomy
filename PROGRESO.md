@@ -25,7 +25,9 @@ Restricciones:
 - [x] Herramientas Android portables en `D:\Claude\repos\vloomy\.tools`: JDK 21, Android SDK 35, Gradle 8.11.1 (wrapper en `android/`). Gradle usa `.tools\gradle-home`.
 - [x] App Android en `android/` (APK en `Vloomy.apk`, se recompila con `android\build.cmd`).
 - [x] Test JVM del wake word en Kotlin: 0,9978 contra 0,998 de Python con el mismo WAV.
-- [x] Capa 2: `capa2/canal.mjs` + `delegar_a_claude` + avisos y permisos por voz. Test: `capa2\test_canal.py`. El usuario tiene que iniciar sesión en `capa2.cmd`.
+- [x] Capa 2: `delegar_a_claude` corre `claude.exe -p --output-format json` sin ventana en `capa2/` (tarea por stdin) y avisa el resultado por voz. Reemplazó al canal (`--dangerously-load-development-channels` pedía confirmar en cada arranque). Requiere una vez `capa2.cmd`: iniciar sesión y confiar en la carpeta.
+- [x] Modo conversación (~7 s sin palabra después de cada respuesta) en PC y celular; "gracias/listo/chau" cortan.
+- [x] `vloomy.log` en la raíz con lo que muestra la ventana (se pisa en cada arranque).
 - [x] "Hey Vloomy" entrenado (`voice\modelos\hey_vloomy.onnx` + `.json`, umbral 0,55, paciencia 2): 99,5% de detección en vivo con voces nuevas y 0 falsas/hora en 10,7 h reales. Copiado a la app. "Hey Jarvis" sigue activo. Negativos en `.cache\wake` (ACAV100M 16 GB + validación).
 - [x] Herramienta `calcular` (cuenta exacta con ast): gpt-oss-120b erraba cuentas en palabras.
 - [x] GUIA.md completa con los pasos para la mañana.
@@ -33,13 +35,14 @@ Restricciones:
 ## Pendiente (necesita al usuario o un teléfono)
 
 - Probar con micrófono real en la PC y en el celular. Ajustar umbrales con su voz si hace falta.
-- Iniciar sesión en `capa2.cmd` y aprobar los servidores MCP.
+- Abrir `capa2.cmd` una vez: iniciar sesión y confiar en la carpeta.
 - Permitir Python en el firewall (lo pide Windows la primera vez que corre `vloomy.cmd`).
 - Opcional: Tailscale para usarlo fuera de casa.
 
 ## Registro
 
 - 19/10/2026 02:43: fases 1 a 4 terminadas y probadas sin micrófono (Python, JVM y protocolo del canal). APK compilado.
+- 20/10/2026: el usuario probó en la PC (anda). Arreglos: un error de sonido trababa el loop; modo conversación; capa 2 sin ventana.
 
 ## Cómo probar
 

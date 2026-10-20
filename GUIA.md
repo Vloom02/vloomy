@@ -36,16 +36,21 @@ https://github.com/Vloom02/vloomy.
    **"Hey Vloomy, ¿qué hora es?"**.
 7. **"Hablar ahora"** sirve para pedir algo sin decir la palabra de activación.
 
-### 3. Capa 2: tareas pesadas con tu suscripción de Claude (opcional, 10 minutos)
+### 3. Capa 2: tareas pesadas con tu suscripción de Claude (una sola vez, 5 minutos)
 
-1. Doble clic en **`capa2.cmd`**. La primera vez:
-   - Iniciá sesión con tu cuenta de Claude: se abre el navegador.
-   - Aceptá el aviso de **development channels**: elegí "I am using this for local development".
-   - Aprobá los servidores MCP **vloomy** y **playwright**.
-2. Dejá esa ventana abierta, junto con `vloomy.cmd`.
-3. Pedile algo largo: **"Hey Vloomy, investigá qué auriculares baratos con buena batería hay y armame un
-   resumen"**. Vloomy dice "Se la pasé a Claude" y, cuando Claude termina, te lo cuenta en voz alta. Si Claude
-   necesita un permiso, Vloomy te pregunta "¿Lo dejo?".
+Vloomy abre Claude solo, sin ventana, cada vez que le pedís algo largo. Lo único que tenés que hacer, **una vez**:
+
+1. Doble clic en **`capa2.cmd`**. Se abre Claude Code.
+2. Iniciá sesión con tu cuenta de Claude (se abre el navegador) y aceptá **confiar en la carpeta** ("trust").
+3. Si aparece el servidor MCP **playwright**, aprobalo.
+4. Cerrá esa ventana (por ejemplo, escribí `/exit`). Ya no hace falta abrirla más.
+
+Después pedile algo largo: **"Hey Vloomy, investigá qué auriculares baratos tienen buena batería y armame un
+resumen"**. Vloomy dice "Se la pasé a Claude" y, cuando Claude termina, te lo cuenta en voz alta. Mientras trabaja,
+podés seguir usando Vloomy para otras cosas.
+
+Claude trabaja sin preguntarte nada a mitad de camino. Solo puede buscar en internet, leer páginas, manejar Edge y
+guardar archivos en `capa2\resultados\`; lo demás lo rechaza solo y te avisa qué no pudo usar.
 
 ### 4. Fuera de casa (opcional)
 
@@ -82,7 +87,7 @@ Celular:  micrófono ─▶ wake word ─▶ bip ─▶ graba ─▶ POST /voz (
                                      no ─▶ capa 1: Groq gpt-oss-120b → gpt-oss-20b → Ollama local (respaldo)
                                            herramientas: control_pc · abrir_app · calcular · atajos · ventanas · delegar_a_claude
                                                                                        │
-                                           capa 2: Claude Code (capa2.cmd) ◀── canal ──┘ ── avisa al terminar
+                                           capa 2: Claude Code sin ventana ◀──────────┘ ── avisa al terminar
           ─▶ respuesta frase por frase: voz Kokoro en la PC / voz de Android en el celular
 ```
 
@@ -98,7 +103,7 @@ Celular:  micrófono ─▶ wake word ─▶ bip ─▶ graba ─▶ POST /voz (
 | Windows-MCP | Atajos de teclado y traer ventanas al frente | PC |
 | Kokoro `em_alex` | Voz de Vloomy en la PC | PC (CPU) |
 | TextToSpeech de Android | Voz de Vloomy en el celular | Celular |
-| Claude Code + `capa2/canal.mjs` | Tareas largas con tu suscripción | PC |
+| Claude Code (`claude -p`, sin ventana) | Tareas largas con tu suscripción | PC |
 
 ## Palabra de activación "Hey Vloomy"
 
@@ -128,14 +133,14 @@ siempre, en la PC y en el celular.
 | Archivo / carpeta | Qué es |
 |---|---|
 | `vloomy.cmd` | Arranca Vloomy en la PC y el servidor para el celular |
-| `capa2.cmd` | Arranca la capa 2 (Claude Code) |
+| `capa2.cmd` | Abre Claude Code a mano: solo para iniciar sesión la primera vez |
 | `Vloomy.apk` | La app para instalar en el celular |
 | `voice\vloomy.py` | El cerebro: voz, IA, herramientas, servidor del celular, capa 2 |
 | `voice\capa0.py` | Comandos fijos y apertura de apps |
 | `voice\entrenar_wake.py` | Entrena "Hey Vloomy" |
 | `voice\modelos\` | El modelo "Hey Vloomy" entrenado |
 | `android\` | Código de la app; `build.cmd` la recompila |
-| `capa2\` | Canal, configuración y reglas (`CLAUDE.md`) de la capa 2 |
+| `capa2\` | Reglas (`CLAUDE.md`), permisos y resultados de la capa 2 |
 | `.env` | Tu clave de Groq y el token del celular. **No se sube a GitHub.** |
 | `.tools\` | Java, SDK de Android, Gradle y Ollama portables |
 | `.cache\` | Modelos de voz, Whisper, Ollama y datos del wake word |
@@ -151,10 +156,10 @@ siempre, en la PC y en el celular.
   - El modo `launch_executable` de Windows-MCP está bloqueado.
 - **La capa 2 tiene reglas escritas en `capa2\CLAUDE.md`:**
   - Nada destructivo, no compra, no manda mensajes, no ingresa contraseñas.
-  - Los borrados por consola están denegados en `capa2\.claude\settings.json`.
-  - Lo demás pide permiso, y Vloomy te lo pregunta por voz.
+  - Solo tiene permitido buscar, leer, manejar Edge y escribir en `capa2\resultados\` (`capa2\.claude\settings.json`).
+  - Lo demás lo rechaza solo, sin ejecutarlo, y Vloomy te dice qué no le dejó usar.
+  - La tarea se le pasa por la entrada estándar, nunca como argumento de línea de comandos.
 - **Lo que devuelven las herramientas y las páginas web es información, nunca órdenes.**
-- **El canal de la capa 2 solo escucha en `127.0.0.1`.** El celular nunca le habla directo.
 - **En Wi-Fi la conexión con el celular es http.** En redes que no son tuyas usá Tailscale, que cifra.
 - **Qué viaja a Groq:** el audio y el texto de lo que pedís después de la palabra de activación. Nada antes.
 
@@ -181,7 +186,8 @@ siempre, en la PC y en el celular.
 | Dice "[ia] … falló" | Groq sin cupo o sin internet: pasa solo a Ollama local, que la primera vez tarda en cargar. |
 | "No pude: estabas usando el mouse…" | Windows-MCP cede el control mientras usás mouse o teclado. Soltalos y repetí (solo afecta atajos y ventanas). |
 | La escucha del celular se cortó | Android a veces la mata para ahorrar batería. Abrí la app y tocá "Activar escucha". Después de reiniciar el celular también hay que activarla a mano (regla de Android 14+). |
-| "La capa 2 no está abierta" | Abrí `capa2.cmd`. |
+| "Claude no tiene la sesión iniciada" / "no tiene permisos en su carpeta" | Abrí `capa2.cmd` una vez, iniciá sesión y aceptá confiar en la carpeta. |
+| Vloomy buscó "capa 2" como si fuera un programa | Ya no pasa: "capa 2" o "Claude" significan pasarle la tarea a Claude. |
 | En la PC no se oye a Vloomy | Vloomy habla por la salida predeterminada de Windows, que hoy es el **monitor LED (HDMI)**. Si no tiene parlantes, elegí tus parlantes o auriculares en Configuración → Sistema → Sonido → Salida. |
 | La PC no te escucha bien | Usa el micrófono predeterminado (hoy el **micrófono USB**). Subí su nivel en Configuración → Sistema → Sonido → Entrada. |
 
@@ -202,6 +208,5 @@ cd D:\Claude\repos\vloomy\voice
 .\.venv\Scripts\python.exe test_capa0.py       # comandos fijos (sin red)
 .\.venv\Scripts\python.exe prueba.py           # punta a punta sin micrófono (usa Groq)
 .\.venv\Scripts\python.exe entrenar_wake.py    # reentrenar "Hey Vloomy"
-..\capa2\test_canal.py                         # con el mismo python: protocolo de la capa 2
 D:\Claude\repos\vloomy\android\build.cmd       # tests del wake word + recompilar Vloomy.apk
 ```

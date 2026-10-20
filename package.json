@@ -6,8 +6,6 @@
     "description": "Vloomy: asistente personal. Cerebro en la PC, clientes en Android.",
     "dependencies": {
         "@anthropic-ai/claude-code": "^2.1.303",
-        "@modelcontextprotocol/sdk": "^1.32.1",
-        "@playwright/mcp": "^0.0.83",
-        "zod": "^4.6.7"
+        "@playwright/mcp": "^0.0.83"
     }
 }
