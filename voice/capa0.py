@@ -57,8 +57,8 @@ def parse(texto):
         if re.search(patron, t):
             return accion, None
     m = _ABRIR.match(t)
-    # Más de 4 palabras o un "y" = pedido compuesto: mejor que lo piense la IA.
-    if m and ' y ' not in f' {m["app"]} ' and len(m['app'].split()) <= 4:
+    # Más de 4 palabras o un "y" = pedido compuesto: mejor que lo piense la IA. "Capa 2" no es una app.
+    if m and ' y ' not in f' {m["app"]} ' and len(m['app'].split()) <= 4 and not m['app'].startswith('capa '):
         return 'abrir', m['app']
     return None
 

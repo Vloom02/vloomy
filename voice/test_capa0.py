@@ -20,6 +20,7 @@ CASOS = {
     'abrí la carpeta de descargas del proyecto de la peluquería': None,
     '¿cuánto es 15 por 7?': None,
     'contame un chiste': None,
+    'abrí la capa 2': None,
 }
 
 for texto, esperado in CASOS.items():
