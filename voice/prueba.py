@@ -56,6 +56,11 @@ def post(ruta, cuerpo, token):
 
 
 async def main():
+    for fin in ['Gracias.', '¡Muchas gracias!', 'Listo', 'Chau', 'Bueno, gracias', 'Nada más.']:
+        assert V.FIN_CHARLA.match(capa0.normalizar(fin)), fin
+    for pedido in ['Gracias, ahora abrí Spotify', '¿Qué hora es?', 'Listo, poné música']:
+        assert not V.FIN_CHARLA.match(capa0.normalizar(pedido)), pedido
+
     v = V.Vloomy()
     tts = Kokoro(str(V.KOKORO / 'kokoro-v1.0.onnx'), str(V.KOKORO / 'voices-v1.0.bin'))
 
@@ -119,7 +124,7 @@ async def main():
     t = time.perf_counter()
     estado, eventos = await asyncio.to_thread(post, '/voz', wav, token)
     print(f'servidor /voz -> {estado} {eventos} | {(time.perf_counter() - t) * 1000:.0f} ms')
-    assert estado == 200 and eventos[0].get('vos') and eventos[-1] == {'fin': True}
+    assert estado == 200 and eventos[0].get('vos') and eventos[-1] == {'fin': True, 'seguir': True}
     assert any('105' in e.get('decir', '') or 'ciento cinco' in e.get('decir', '').lower() for e in eventos)
     servidor.cancel()
     print('ok')

@@ -57,6 +57,11 @@ if VLOOMY_MODEL.exists():
 VAD_UMBRAL = 0.5
 SILENCIO_FIN = 10             # ~0,8 s callado = terminaste de hablar
 ESPERA_MAX = 62               # ~5 s sin que digas nada = falsa alarma
+CONVERSACION_ESPERA = 88      # ~7 s: después de responder sigue escuchando sin la palabra de activación
+FIN_CHARLA = re.compile(r'^(?:(?:no |ok |bueno |listo )?(?:muchas )?gracias|listo|nada mas|eso es todo|chau|basta|'
+                        r'ya esta|nada)$')
+# Lo que Whisper "oye" en el silencio o en el ruido: no es un pedido.
+ALUCINACIONES = ('amara org', 'subtitulos realizados', 'gracias por ver', 'suscribete')
 HABLA_MAX = 190               # ~15 s como máximo por pedido
 
 # Medido el 19/10/2026: 120b en "low" a veces erra cuentas ("quince por siete" = 95); "medium" acertó 8/8
@@ -262,8 +267,8 @@ class Vloomy:
                 if seguidos[nombre] >= WAKE_PACIENCIA:
                     return nombre
 
-    def escuchar(self):
-        """Graba desde que hablás hasta ~0,8 s de silencio. None si no dijiste nada."""
+    def escuchar(self, espera=ESPERA_MAX):
+        """Graba desde que hablás hasta ~0,8 s de silencio. None si no dijiste nada en `espera` bloques."""
         self.vad.reset_states()
         trozos, hablo, callado = [], False, 0
         for i in range(HABLA_MAX):
@@ -275,7 +280,7 @@ class Vloomy:
                 callado += 1
                 if callado >= SILENCIO_FIN:
                     break
-            elif i >= ESPERA_MAX:
+            elif i >= espera:
                 return None
         return np.concatenate(trozos) if hablo else None
 
@@ -403,6 +408,18 @@ class Vloomy:
         else:
             decir(capa0.ejecutar_local(accion))
 
+    async def charla(self, texto, decir, confirmar):
+        """Responde un pedido dentro de una conversación. False = la conversación terminó."""
+        t = capa0.normalizar(texto)
+        if not t or any(a in t for a in ALUCINACIONES):
+            return False
+        if FIN_CHARLA.match(t):
+            decir('De nada.' if 'gracias' in t else 'Dale.')
+            return False
+        async with self.turnos:
+            await self.turno(texto, decir, confirmar)
+        return True
+
     # ---------- PC ----------
 
     async def confirmar_pc(self, pregunta):
@@ -429,21 +446,28 @@ class Vloomy:
                 sd.play(BIP, 24000)
             except Exception as e:
                 print(f'[voz] no pude hacer el bip: {e}')
-            audio = await asyncio.to_thread(self.escuchar)
-            if audio is None:
-                print('[no te escuché nada después de la palabra]')
-                continue
-            t0 = time.perf_counter()
-            try:
-                texto = await self.transcribir(audio)
-                print(f'\nVos (PC): {texto}   [voz→texto {1000 * (time.perf_counter() - t0):.0f} ms]')
-                if texto:
-                    async with self.turnos:
-                        await self.turno(texto, self.voz.decir, self.confirmar_pc)
+            espera = ESPERA_MAX
+            while True:  # conversación: después de cada respuesta sigue escuchando sin la palabra
+                audio = await asyncio.to_thread(self.escuchar, espera)
+                if audio is None:
+                    print('[fin de la conversación: decí la palabra de nuevo]')
+                    break
+                t0 = time.perf_counter()
+                try:
+                    texto = await self.transcribir(audio)
+                    print(f'\nVos (PC): {texto}   [voz→texto {1000 * (time.perf_counter() - t0):.0f} ms]')
+                    seguir = await self.charla(texto, self.voz.decir, self.confirmar_pc)
                     print(f'[respuesta lista en {1000 * (time.perf_counter() - t0):.0f} ms desde que te callaste]')
-            except Exception as e:
-                print(f'[error] {e}')
-                self.voz.decir('Tuve un error, probá de nuevo.')
+                except Exception as e:
+                    print(f'[error] {e}')
+                    self.voz.decir('Tuve un error, probá de nuevo.')
+                    seguir = False
+                if not seguir:
+                    break
+                self.voz.esperar()
+                self.mic.vaciar()
+                print('[sigo escuchando: hablá sin decir la palabra]')
+                espera = CONVERSACION_ESPERA
 
     # ---------- capa 2 ----------
 
@@ -520,20 +544,20 @@ class Vloomy:
 
         async def trabajar():
             t0 = time.perf_counter()
+            seguir = False
             try:
                 texto = await self.transcribir(audio)
                 print(f'\nVos (celular): {texto}   [voz→texto {1000 * (time.perf_counter() - t0):.0f} ms]')
                 salida.put_nowait({'vos': texto})
                 while self.avisos:  # lo que terminó Claude mientras no estabas
                     decir(self.avisos.popleft())
-                if texto:
-                    async with self.turnos:
-                        await self.turno(texto, decir, confirmar)
+                seguir = await self.charla(texto, decir, confirmar)
             except Exception as e:
                 print(f'[error celular] {e}')
                 decir('Tuve un error, probá de nuevo.')
             finally:
-                salida.put_nowait({'fin': True})
+                # seguir: la app sigue escuchando unos segundos sin la palabra de activación
+                salida.put_nowait({'fin': True, 'seguir': seguir})
 
         async def flujo():
             tarea = asyncio.create_task(trabajar())

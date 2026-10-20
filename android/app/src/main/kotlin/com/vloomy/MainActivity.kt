@@ -34,7 +34,7 @@ class MainActivity : Activity() {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
             setText(prefs.getString("token", ""))
         }
-        estado = TextView(this).apply { text = "Decí \"Hey Jarvis\" (en inglés) cuando la escucha esté activa." }
+        estado = TextView(this).apply { text = "Con la escucha activa, decí \"Hey Vloomy\" (o \"Hey Jarvis\")." }
 
         val columna = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -81,7 +81,7 @@ class MainActivity : Activity() {
             return
         }
         startForegroundService(Intent(this, VloomyService::class.java).setAction(accion))
-        estado.text = if (accion == null) "Escuchando. Decí \"Hey Jarvis\"." else "Te escucho…"
+        estado.text = if (accion == null) "Escuchando. Decí \"Hey Vloomy\"." else "Te escucho…"
     }
 
     private fun sinAhorro() {

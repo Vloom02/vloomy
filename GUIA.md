@@ -67,6 +67,9 @@ abrir puertos.
 - **Los atajos de teclado** ("cerrá esta ventana" → `alt+f4`) preguntan "¿Confirmo…?". Contestás "sí", "dale" u "ok";
   cualquier otra cosa lo cancela.
 - **Vloomy recuerda las últimas 3 idas y vueltas**, compartidas entre la PC y el celular, así que "¿y ahora cerrala?" funciona.
+- **Modo conversación:** después de cada respuesta sigue escuchando **~7 segundos sin que repitas "Hey Vloomy"**. Si
+  te quedás callado, vuelve a esperar la palabra. "Gracias", "listo", "chau" o "nada más" cortan la conversación. Anda
+  igual en la PC y en el celular.
 
 ## Cómo funciona
 

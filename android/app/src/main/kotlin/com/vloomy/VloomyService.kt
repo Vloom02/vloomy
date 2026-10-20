@@ -47,7 +47,7 @@ class VloomyService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(1, notificacion("Decí \"Hey Jarvis\""), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+        startForeground(1, notificacion("Decí \"Hey Vloomy\""), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
         if (intent?.action == HABLAR) forzar = true
         if (hilo == null) {
             activo = true
@@ -112,35 +112,45 @@ class VloomyService : Service() {
         }
     }
 
+    /** Una conversación: después de cada respuesta sigue escuchando ~7 s sin la palabra de activación. */
     private fun atender(grabador: AudioRecord, vad: Vad, servidor: Servidor) {
         bip.startTone(ToneGenerator.TONE_PROP_BEEP, 120)
         avisar("Te escucho…")
-        val audio = escuchar(grabador, vad) ?: return avisar("Decí \"Hey Jarvis\"")
-        avisar("Pensando…")
-        try {
-            servidor.voz(audio) { evento ->
-                when {
-                    evento.has("vos") -> avisar("Vos: ${evento.getString("vos")}")
-                    evento.has("decir") -> decir(evento.getString("decir"))
-                    evento.has("preguntar") -> {
-                        decir(evento.getString("preguntar"))
-                        esperarVoz()
-                        vaciar(grabador)
-                        bip.startTone(ToneGenerator.TONE_PROP_BEEP, 120)
-                        servidor.responder(evento.getString("id"), escuchar(grabador, vad) ?: ShortArray(1600))
+        var espera = ESPERA_MAX
+        while (activo) {
+            val audio = escuchar(grabador, vad, espera) ?: break
+            avisar("Pensando…")
+            var seguir = false
+            try {
+                servidor.voz(audio) { evento ->
+                    when {
+                        evento.has("vos") -> avisar("Vos: ${evento.getString("vos")}")
+                        evento.has("decir") -> decir(evento.getString("decir"))
+                        evento.has("preguntar") -> {
+                            decir(evento.getString("preguntar"))
+                            esperarVoz()
+                            vaciar(grabador)
+                            bip.startTone(ToneGenerator.TONE_PROP_BEEP, 120)
+                            servidor.responder(evento.getString("id"), escuchar(grabador, vad, ESPERA_MAX) ?: ShortArray(1600))
+                        }
+                        evento.has("fin") -> seguir = evento.optBoolean("seguir", false)
                     }
                 }
+            } catch (e: Exception) {
+                Log.w(TAG, "falló el pedido", e)
+                decir("No me pude conectar con la PC.")
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "falló el pedido", e)
-            decir("No me pude conectar con la PC.")
+            esperarVoz()
+            if (!seguir) break
+            vaciar(grabador)
+            avisar("Te sigo escuchando…")
+            espera = CONVERSACION_ESPERA
         }
-        esperarVoz()
-        avisar("Decí \"Hey Jarvis\"")
+        avisar("Decí \"Hey Vloomy\"")
     }
 
-    /** Graba desde que hablás hasta ~0,8 s de silencio. null si no dijiste nada en ~5 s. */
-    private fun escuchar(grabador: AudioRecord, vad: Vad): ShortArray? {
+    /** Graba desde que hablás hasta ~0,8 s de silencio. null si no dijiste nada en [espera] bloques. */
+    private fun escuchar(grabador: AudioRecord, vad: Vad, espera: Int): ShortArray? {
         vad.reset()
         val trozos = mutableListOf<ShortArray>()
         var hablo = false
@@ -154,7 +164,7 @@ class VloomyService : Service() {
                 callado = 0
             } else if (hablo) {
                 if (++callado >= SILENCIO_FIN) break
-            } else if (i >= ESPERA_MAX) {
+            } else if (i >= espera) {
                 return null
             }
         }
@@ -212,6 +222,7 @@ class VloomyService : Service() {
         private const val VAD_UMBRAL = 0.5f
         private const val SILENCIO_FIN = 10   // ~0,8 s callado = terminaste de hablar
         private const val ESPERA_MAX = 62     // ~5 s sin que digas nada = falsa alarma
+        private const val CONVERSACION_ESPERA = 88  // ~7 s para seguir la charla sin la palabra
         private const val HABLA_MAX = 190     // ~15 s como máximo por pedido
     }
 }
