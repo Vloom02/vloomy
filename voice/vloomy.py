@@ -671,7 +671,7 @@ class Vloomy:
         """Las mismas pruebas de siempre, pero sobre la copia (con los modelos de la carpeta original)."""
         env = {**os.environ, 'VLOOMY_RECURSOS': str(RECURSOS), 'PYTHONIOENCODING': 'utf-8'}
         python = RECURSOS / 'voice' / '.venv' / 'Scripts' / 'python.exe'
-        pasos = [([str(python), 'test_capa0.py'], copia / 'voice'), ([str(python), 'prueba.py'], copia / 'voice')]
+        pasos = [([str(python), prueba], copia / 'voice') for prueba in ('test_capa0.py', 'test_mejora.py', 'prueba.py')]
         if android:
             pasos.append((['cmd', '/c', str(copia / 'android' / 'build.cmd')], copia / 'android'))
         for comando, carpeta in pasos:

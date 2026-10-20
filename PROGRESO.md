@@ -28,6 +28,8 @@ Restricciones:
 - [x] Capa 2: `delegar_a_claude` corre `claude.exe -p --output-format json` sin ventana en `capa2/` (tarea por stdin) y avisa el resultado por voz. Reemplazó al canal (`--dangerously-load-development-channels` pedía confirmar en cada arranque). Requiere una vez `capa2.cmd`: iniciar sesión y confiar en la carpeta.
 - [x] Modo conversación (~7 s sin palabra después de cada respuesta) en PC y celular; "gracias/listo/chau" cortan.
 - [x] `vloomy.log` en la raíz con lo que muestra la ventana (se pisa en cada arranque).
+- [x] Panel gráfico (`voice/panel.html`, servido en `/` solo para 127.0.0.1, eventos por SSE en `/panel/eventos`): estado, charla, tareas de Claude, escribir, hablar, silenciar micrófono y voz. Se abre solo en una ventana de Edge (`--app`).
+- [x] Modo mejora: `mejorar_vloomy` crea un worktree en `.mejoras/`, corre Claude con `--allowedTools Read,Glob,Grep,Edit,Write` y `acceptEdits`, prueba la copia (test_capa0, test_mejora, prueba y, si tocó android/, build.cmd) con `VLOOMY_RECURSOS` apuntando a los modelos originales, y deja el commit listo. `aplicar_mejora` (merge --ff-only + reinicio con código 3), `descartar_mejora`, `deshacer_mejora` (revert). Probado de punta a punta con Claude real (60 s).
 - [x] "Hey Vloomy" entrenado (`voice\modelos\hey_vloomy.onnx` + `.json`, umbral 0,55, paciencia 2): 99,5% de detección en vivo con voces nuevas y 0 falsas/hora en 10,7 h reales. Copiado a la app. "Hey Jarvis" sigue activo. Negativos en `.cache\wake` (ACAV100M 16 GB + validación).
 - [x] Herramienta `calcular` (cuenta exacta con ast): gpt-oss-120b erraba cuentas en palabras.
 - [x] GUIA.md completa con los pasos para la mañana.

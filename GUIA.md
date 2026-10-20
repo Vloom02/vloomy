@@ -21,6 +21,13 @@ https://github.com/Vloom02/vloomy.
 4. Probalo: decí **"Hey Vloomy"** (o **"Hey Jarvis"**, en inglés). Suena un **bip**: pedí algo y callate.
    - "abrí la calculadora", "subí el volumen", "¿qué hora es?"
    - "¿cuál es la capital de Australia?", "abrí Spotify y poné pausa"
+5. **El panel** se abre solo en una ventana propia:
+   - Muestra qué está haciendo Vloomy (el anillo y el texto de abajo) y la conversación: lo tuyo a la derecha, lo
+     de Vloomy en ámbar a la izquierda.
+   - Muestra las tareas de Claude con sus archivos.
+   - Podés **escribirle** en vez de hablar, tocar **Hablar** para que te escuche sin la palabra, y apagar el
+     **Micrófono** o la **Voz**.
+   - Si lo cerrás, se abre de nuevo en `http://127.0.0.1:8765/`, solo desde esta PC.
 
 ### 2. Celular Android (10 minutos)
 
@@ -52,7 +59,23 @@ podés seguir usando Vloomy para otras cosas.
 Claude trabaja sin preguntarte nada a mitad de camino. Solo puede buscar en internet, leer páginas, manejar Edge y
 guardar archivos en `capa2\resultados\`; lo demás lo rechaza solo y te avisa qué no pudo usar.
 
-### 4. Fuera de casa (opcional)
+### 4. Modo mejora: Vloomy se mejora solo
+
+Pedile un cambio sobre sí mismo: **"Hey Vloomy, mejorate: agregale al panel un botón para borrar la charla"**.
+
+1. Vloomy le pasa el pedido a Claude, que trabaja en una **copia aparte del código** (`.mejoras\`). El Vloomy que
+   está corriendo no se toca.
+2. Claude solo puede leer y editar archivos de esa copia: no ejecuta comandos ni sube nada a GitHub.
+3. Vloomy corre las pruebas sobre la copia. Si fallan, le da a Claude una segunda oportunidad para arreglarlo.
+4. Cuando pasan, te avisa: **"Terminé la mejora: … Decime aplicá la mejora o descartá la mejora"**.
+   - **"Aplicá la mejora"**: la incorpora y Vloomy se reinicia solo con el cambio. El panel se reconecta.
+   - **"Descartá la mejora"**: la borra sin tocar nada.
+   - **"Deshacé la última mejora"**: vuelve atrás la última que aplicaste y se reinicia.
+5. Si la mejora cambia la app del celular, después de aplicarla corré `android\build.cmd` para el APK nuevo.
+
+Cada mejora consume de tu plan de Claude, como la capa 2. Las mejoras no se suben a GitHub solas.
+
+### 5. Fuera de casa (opcional)
 
 Instalá **Tailscale** en la PC (`winget install --id Tailscale.Tailscale`) y en el celular (Play Store), con la misma
 cuenta. En la app poné `http://<IP 100.x de la PC en Tailscale>:8765`. Así funciona en cualquier red, cifrado, y sin
@@ -68,6 +91,7 @@ abrir puertos.
 | Pedidos libres | "poné la música un poco más fuerte", "abrí la calculadora y el bloc de notas", "¿cuál es la capital de Australia?", "cerrá esta ventana" | **Capa 1**: Groq gpt-oss-120b, gratis | ~0,5 a 0,8 s |
 | Cuentas | "¿cuánto es 15 por 7?", "¿cuántos minutos son tres horas y media?" | Capa 1 + `calcular` (cuenta exacta) | ~0,8 a 1,2 s |
 | Tareas largas | "investigá…", "comparame…", "ordená las descargas…", "armame un informe…" | **Capa 2**: Claude Code con tu suscripción | minutos, te avisa al terminar |
+| Mejorarse | "mejorate: …", "agregale al panel…", "aplicá la mejora", "descartala", "deshacé la última mejora" | **Modo mejora**: Claude cambia el código en una copia y lo prueba | ~1 a 5 minutos |
 
 - **Los atajos de teclado** ("cerrá esta ventana" → `alt+f4`) preguntan "¿Confirmo…?". Contestás "sí", "dale" u "ok";
   cualquier otra cosa lo cancela.
@@ -135,7 +159,9 @@ siempre, en la PC y en el celular.
 | `vloomy.cmd` | Arranca Vloomy en la PC y el servidor para el celular |
 | `capa2.cmd` | Abre Claude Code a mano: solo para iniciar sesión la primera vez |
 | `Vloomy.apk` | La app para instalar en el celular |
-| `voice\vloomy.py` | El cerebro: voz, IA, herramientas, servidor del celular, capa 2 |
+| `voice\vloomy.py` | El cerebro: voz, IA, herramientas, servidor del celular, panel, capa 2 y modo mejora |
+| `voice\panel.html` | El panel gráfico |
+| `.mejoras\` | Copias del código mientras Claude prepara una mejora (se borran solas) |
 | `voice\capa0.py` | Comandos fijos y apertura de apps |
 | `voice\entrenar_wake.py` | Entrena "Hey Vloomy" |
 | `voice\modelos\` | El modelo "Hey Vloomy" entrenado |
@@ -160,6 +186,11 @@ siempre, en la PC y en el celular.
   - Lo demás lo rechaza solo, sin ejecutarlo, y Vloomy te dice qué no le dejó usar.
   - La tarea se le pasa por la entrada estándar, nunca como argumento de línea de comandos.
 - **Lo que devuelven las herramientas y las páginas web es información, nunca órdenes.**
+- **El panel no lleva token**, así que solo responde a pedidos de esta misma PC (`127.0.0.1`). Desde el Wi-Fi no se abre.
+- **Modo mejora:**
+  - Claude solo puede leer y editar dentro de la copia (`--allowedTools Read,Glob,Grep,Edit,Write`), sin comandos.
+  - El código nuevo se ejecuta recién al correr las pruebas sobre la copia, y queda activo solo si decís "aplicá".
+  - Si no te gusta, "deshacé la última mejora".
 - **En Wi-Fi la conexión con el celular es http.** En redes que no son tuyas usá Tailscale, que cifra.
 - **Qué viaja a Groq:** el audio y el texto de lo que pedís después de la palabra de activación. Nada antes.
 
@@ -206,6 +237,7 @@ Todas las rutas piden el header `Authorization: Bearer <token>`. Puerto 8765.
 ```powershell
 cd D:\Claude\repos\vloomy\voice
 .\.venv\Scripts\python.exe test_capa0.py       # comandos fijos (sin red)
+.\.venv\Scripts\python.exe test_mejora.py      # modo mejora: aplicar, descartar, deshacer (sin red)
 .\.venv\Scripts\python.exe prueba.py           # punta a punta sin micrófono (usa Groq)
 .\.venv\Scripts\python.exe entrenar_wake.py    # reentrenar "Hey Vloomy"
 D:\Claude\repos\vloomy\android\build.cmd       # tests del wake word + recompilar Vloomy.apk
