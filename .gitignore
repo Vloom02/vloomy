@@ -6,3 +6,6 @@ voice/.venv/
 .tools/
 Vloomy.apk
 *.log
+.mejoras/
+capa2/resultados/*
+!capa2/resultados/.gitkeep

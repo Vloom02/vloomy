@@ -1,8 +1,9 @@
 @echo off
 rem Compila la app, corre los tests del wake word y deja Vloomy.apk en la raiz del proyecto.
 rem Todo lo que baja Gradle queda en D:\Claude\repos\vloomy\.tools (nada en C).
+rem VLOOMY_RECURSOS: carpeta con .tools cuando se compila desde una copia (modo mejora).
 setlocal
-set "T=%~dp0..\.tools"
+if defined VLOOMY_RECURSOS (set "T=%VLOOMY_RECURSOS%\.tools") else (set "T=%~dp0..\.tools")
 set "JAVA_HOME=%T%\jdk-21"
 set "ANDROID_HOME=%T%\android-sdk"
 set "ANDROID_USER_HOME=%T%\android-home"
