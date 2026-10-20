@@ -35,7 +35,7 @@ Restricciones:
 ## Pendiente (necesita al usuario o un teléfono)
 
 - Probar con micrófono real en la PC y en el celular. Ajustar umbrales con su voz si hace falta.
-- Abrir `capa2.cmd` una vez: iniciar sesión y confiar en la carpeta.
+- ~~Abrir `capa2.cmd` una vez: iniciar sesión y confiar en la carpeta.~~ Hecho el 20/10/2026: capa 2 probada sin ventana ("hola" en 10 s; búsqueda web en 20 s).
 - Permitir Python en el firewall (lo pide Windows la primera vez que corre `vloomy.cmd`).
 - Opcional: Tailscale para usarlo fuera de casa.
 
