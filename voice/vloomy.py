@@ -188,6 +188,7 @@ class Voz:
     def decir(self, frase):
         if not frase.strip():
             return
+        print(f'Vloomy: {frase.strip()}')
         with self._cv:
             self._pendientes += 1
         self.frases.put(frase.strip())
@@ -208,12 +209,16 @@ class Voz:
     def _reproducir(self):
         while True:
             item = self.audios.get()
-            if item is not None:
-                sd.play(item[0], item[1])
-                sd.wait()
-            with self._cv:
-                self._pendientes -= 1
-                self._cv.notify_all()
+            try:
+                if item is not None:
+                    sd.play(item[0], item[1])
+                    sd.wait()
+            except Exception as e:  # si el audio falla, Vloomy igual tiene que seguir escuchando
+                print(f'[voz] no pude reproducir: {e}')
+            finally:
+                with self._cv:
+                    self._pendientes -= 1
+                    self._cv.notify_all()
 
 
 class Microfono:
@@ -255,7 +260,7 @@ class Vloomy:
             for nombre, p in oww.predict(self.mic.leer()).items():
                 seguidos[nombre] = seguidos[nombre] + 1 if p >= umbrales[nombre] else 0
                 if seguidos[nombre] >= WAKE_PACIENCIA:
-                    return
+                    return nombre
 
     def escuchar(self):
         """Graba desde que hablás hasta ~0,8 s de silencio. None si no dijiste nada."""
@@ -417,10 +422,16 @@ class Vloomy:
         while True:
             self.voz.esperar()
             self.mic.vaciar()  # no procesar lo que el micrófono oyó mientras Vloomy hablaba
-            await asyncio.to_thread(self.esperar_wake, oww)
-            sd.play(BIP, 24000)
+            print('\n[esperando la palabra de activación]')
+            nombre = await asyncio.to_thread(self.esperar_wake, oww)
+            print(f'[{nombre}: te escucho]')
+            try:
+                sd.play(BIP, 24000)
+            except Exception as e:
+                print(f'[voz] no pude hacer el bip: {e}')
             audio = await asyncio.to_thread(self.escuchar)
             if audio is None:
+                print('[no te escuché nada después de la palabra]')
                 continue
             t0 = time.perf_counter()
             try:
