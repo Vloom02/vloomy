@@ -91,14 +91,6 @@ async def main():
     print(f'menú Inicio: {len(apps)} apps; "bloc de notas" -> {capa0.buscar_app("bloc de notas", apps)!r}, '
           f'"calculadora" -> {capa0.buscar_app("calculadora", apps)!r}')
 
-    params = StdioServerParameters(command=str(V.WINDOWS_MCP), args=['serve', '--tools', ','.join(V.MCP_PERMITIDAS)],
-                                   env={**os.environ})
-    async with stdio_client(params, errlog=open(os.devnull, 'w')) as (r, w), ClientSession(r, w) as s:
-        await s.initialize()
-        v.herramientas += [{'type': 'function', 'function': {'name': t.name, 'description': t.description,
-                                                              'parameters': t.input_schema}}
-                           for t in (await s.list_tools()).tools if t.name in V.MCP_PERMITIDAS]
-
     usadas = []
     ejecutar_real = v.ejecutar
 
@@ -110,7 +102,7 @@ async def main():
     cliente, modelo, extra = next(v.proveedores())
     for pedido in ['¿Cuánto es quince por siete?', 'Poné la música un poco más fuerte', 'Abrí la calculadora']:
         usadas.clear()
-        msgs = [{'role': 'system', 'content': V.SISTEMA.format(ahora='lunes 19 de octubre 10:00')},
+        msgs = [{'role': 'system', 'content': V.SISTEMA.format(ahora='lunes 19 de octubre 10:00', memoria='(nada)')},
                 {'role': 'user', 'content': pedido}]
         t = time.perf_counter()
         respuesta = await v.conversar(cliente, modelo, extra, msgs, lambda frase: None, None)

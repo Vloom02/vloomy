@@ -34,6 +34,17 @@ Restricciones:
 - [x] Herramienta `calcular` (cuenta exacta con ast): gpt-oss-120b erraba cuentas en palabras.
 - [x] GUIA.md completa con los pasos para la mañana.
 
+- [x] 20/10/2026: búsqueda rápida (`buscar_en_internet`, browser_search de gpt-oss en Groq), memoria (`memoria.py`, datos/ fuera de git), recordatorios y alarmas (+ GET /avisos para el celular), interrumpir con la palabra, voz argentina Piper es_AR (cambiar_voz), prompt y herramientas compactados por el límite de 8000 tokens/min de Groq.
+
+## Pendiente de la tanda del 20/10 (cortado por límite de uso)
+
+- [ ] Reintentar en el mismo modelo si Groq pide esperar pocos segundos (429) y sumar qwen/qwen3.8-27b antes de Ollama.
+- [ ] App Android: consultar GET /avisos cada ~30 s y decirlos (recordatorios y alarmas en el celular); recompilar.
+- [ ] Arranque con Windows: script que el usuario corre una vez (acceso directo en la carpeta Inicio; desde la app de Claude no se puede porque MSIX virtualiza AppData).
+- [ ] Fuera de casa: mostrar la IP de Tailscale (100.x) al arrancar + pasos en GUIA.md.
+- [ ] Ajustar "Hey Vloomy" a la voz del usuario: entrenar_wake.py tiene que usar .cache/wake/usuario/ (grabar_voz.cmd) si existe.
+- [ ] GUIA.md: documentar búsqueda, memoria, recordatorios, interrumpir y voz argentina.
+
 ## Pendiente (necesita al usuario o un teléfono)
 
 - Probar con micrófono real en la PC y en el celular. Ajustar umbrales con su voz si hace falta.
